@@ -2,7 +2,7 @@
 #include "hnswlib.h"
 
 namespace hnswlib {
-
+// 计算两个向量之间的L2距
 static float
 L2Sqr(const void *pVect1v, const void *pVect2v, const void *qty_ptr) {
     float *pVect1 = (float *) pVect1v;

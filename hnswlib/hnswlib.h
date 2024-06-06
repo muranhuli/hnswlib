@@ -174,10 +174,13 @@ template<typename MTYPE>
 class SpaceInterface {
  public:
     // virtual void search(void *);
+    // 获得一个向量的数据大小，占多少字节
     virtual size_t get_data_size() = 0;
 
+    // 任意两个向量之间的距离计算函数
     virtual DISTFUNC<MTYPE> get_dist_func() = 0;
 
+    // 获取向量的维度大小
     virtual void *get_dist_func_param() = 0;
 
     virtual ~SpaceInterface() {}

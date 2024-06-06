@@ -37,6 +37,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     std::unique_ptr<VisitedListPool> visited_list_pool_{nullptr};
 
     // Locks operations with element by label value
+    // 互斥锁向量
     mutable std::vector<std::mutex> label_op_locks_;
 
     std::mutex global;
@@ -117,16 +118,20 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         level_generator_.seed(random_seed);
         update_probability_generator_.seed(random_seed + 1);
 
+        // 第0层节点的邻居表大小
         size_links_level0_ = maxM0_ * sizeof(tableint) + sizeof(linklistsizeint);
+        // 第0层中每一个数据所占据的全部内存大小，包括邻居表和数据
         size_data_per_element_ = size_links_level0_ + data_size_ + sizeof(labeltype);
+        // 数据位在内存中的偏移量
         offsetData_ = size_links_level0_;
+        // 标签位在内存中的偏移量
         label_offset_ = size_links_level0_ + data_size_;
         offsetLevel0_ = 0;
 
         data_level0_memory_ = (char *) malloc(max_elements_ * size_data_per_element_);
         if (data_level0_memory_ == nullptr)
             throw std::runtime_error("Not enough memory");
-
+        // 当前记录数，初始为0
         cur_element_count = 0;
 
         visited_list_pool_ = std::unique_ptr<VisitedListPool>(new VisitedListPool(1, max_elements));
@@ -338,11 +343,11 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         }
 
         visited_array[ep_id] = visited_array_tag;
-
+        int count =0;
         while (!candidate_set.empty()) {
             std::pair<dist_t, tableint> current_node_pair = candidate_set.top();
             dist_t candidate_dist = -current_node_pair.first;
-
+            count++;
             bool flag_stop_search;
             if (bare_bone_search) {
                 flag_stop_search = candidate_dist > lowerBound;
@@ -434,7 +439,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                 }
             }
         }
-
+        std::cout<<"count: "<<count<<std::endl;
         visited_list_pool_->releaseVisitedList(vl);
         return top_candidates;
     }
@@ -930,6 +935,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
 
     /*
     * Checks the first 16 bits of the memory to see if the element is marked deleted.
+    * 检查某个元素是否被标记为删除
     */
     bool isMarkedDeleted(tableint internalId) const {
         unsigned char *ll_cur = ((unsigned char*)get_linklist0(internalId)) + 2;

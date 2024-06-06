@@ -2,7 +2,7 @@
 #include "hnswlib.h"
 
 namespace hnswlib {
-
+// 向量内积
 static float
 InnerProduct(const void *pVect1, const void *pVect2, const void *qty_ptr) {
     size_t qty = *((size_t *) qty_ptr);
@@ -13,6 +13,7 @@ InnerProduct(const void *pVect1, const void *pVect2, const void *qty_ptr) {
     return res;
 }
 
+// 1-向量内积
 static float
 InnerProductDistance(const void *pVect1, const void *pVect2, const void *qty_ptr) {
     return 1.0f - InnerProduct(pVect1, pVect2, qty_ptr);
