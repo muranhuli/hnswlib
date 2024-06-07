@@ -14,6 +14,8 @@ int solve(int m, std::fstream &fout)
                                // strongly affects the memory consumption
     int ef_construction = 100; // Controls index search speed/build speed tradeoff
 
+    std::cout<< sizeof(unsigned short int)<<" "<<sizeof(unsigned int)<<std::endl;
+    return 0;
     // Initing index
     hnswlib::L2Space space(dim);
     hnswlib::HierarchicalNSW<float> *alg_hnsw = new hnswlib::HierarchicalNSW<float>(&space, max_elements, M, ef_construction);
