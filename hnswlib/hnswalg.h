@@ -37,8 +37,8 @@ namespace hnswlib {
         int maxlevel_{0};
 
 
-        char *vector_data;
-//        char *raw_vector_data;
+//        char *vector_data;
+        char *raw_vector_data;
         std::unordered_map<tableint, std::deque<char *>> index_to_data;
 
 
