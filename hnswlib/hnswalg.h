@@ -7,8 +7,10 @@
 #include <stdlib.h>
 #include <assert.h>
 #include <unordered_set>
+#include <unordered_map>
 #include <list>
 #include <memory>
+#include <deque>
 
 namespace hnswlib {
     typedef unsigned int tableint;
@@ -33,6 +35,16 @@ namespace hnswlib {
 
         double mult_{0.0}, revSize_{0.0};
         int maxlevel_{0};
+
+
+        char *vector_data;
+//        char *raw_vector_data;
+        std::unordered_map<tableint, std::deque<char *>> index_to_data;
+
+
+
+
+
 
         std::unique_ptr<VisitedListPool> visited_list_pool_{nullptr};
 
@@ -126,13 +138,17 @@ namespace hnswlib {
             update_probability_generator_.seed(random_seed + 1);
 
 
+            // 初始化原始向量的存储空间
+            vector_data = (char *) malloc(max_elements * data_size_);
+
+
             size_links_level0_ = maxM0_ * sizeof(tableint) + sizeof(linklistsizeint);
             // 第0层中每一个数据所占据的全部内存大小，包括邻居表和数据
-            size_data_per_element_ = size_links_level0_ + data_size_ + sizeof(labeltype);
+            size_data_per_element_ = size_links_level0_ + sizeof(labeltype);
             // 数据位在内存中的偏移量
             offsetData_ = size_links_level0_;
             // 标签位在内存中的偏移量
-            label_offset_ = size_links_level0_ + data_size_;
+            label_offset_ = size_links_level0_;
             offsetLevel0_ = 0;
 
             // 为第0层节点分配内存
@@ -219,6 +235,7 @@ namespace hnswlib {
          * 返回第0层节点的数据初始位置
          * */
         inline char *getDataByInternalId(tableint internal_id) const {
+            return (this->vector_data + internal_id*data_size_);
             return (data_level0_memory_ + internal_id * size_data_per_element_ + offsetData_);
         }
 
@@ -252,10 +269,16 @@ namespace hnswlib {
 
             dist_t lowerBound;
             if (!isMarkedDeleted(ep_id)) {
-                dist_t dist = fstdistfunc_(data_point, getDataByInternalId(ep_id), dist_func_param_);
-                top_candidates.emplace(dist, ep_id);
-                lowerBound = dist;
-                candidateSet.emplace(-dist, ep_id);
+                for(auto& info: index_to_data[ep_id]) {
+                    dist_t dist = fstdistfunc_(data_point, info, dist_func_param_);
+                    top_candidates.emplace(dist, ep_id);
+                    lowerBound = dist;
+                    candidateSet.emplace(-dist, ep_id);
+                }
+//                dist_t dist = fstdistfunc_(data_point, getDataByInternalId(ep_id), dist_func_param_);
+//                top_candidates.emplace(dist, ep_id);
+//                lowerBound = dist;
+//                candidateSet.emplace(-dist, ep_id);
             } else {
                 lowerBound = std::numeric_limits<dist_t>::max();
                 candidateSet.emplace(-lowerBound, ep_id);
@@ -298,23 +321,25 @@ namespace hnswlib {
 #endif
                     if (visited_array[candidate_id] == visited_array_tag) continue;
                     visited_array[candidate_id] = visited_array_tag;
-                    char *currObj1 = (getDataByInternalId(candidate_id));
 
-                    dist_t dist1 = fstdistfunc_(data_point, currObj1, dist_func_param_);
-                    if (top_candidates.size() < ef_construction_ || lowerBound > dist1) {
-                        candidateSet.emplace(-dist1, candidate_id);
+                    for (auto & info: this->index_to_data[candidate_id]) {
+                        char *currObj1 = info;
+                        dist_t dist1 = fstdistfunc_(data_point, currObj1, dist_func_param_);
+                        if (top_candidates.size() < ef_construction_ || lowerBound > dist1) {
+                            candidateSet.emplace(-dist1, candidate_id);
 #ifdef USE_SSE
-                        _mm_prefetch(getDataByInternalId(candidateSet.top().second), _MM_HINT_T0);
+                            _mm_prefetch(getDataByInternalId(candidateSet.top().second), _MM_HINT_T0);
 #endif
 
-                        if (!isMarkedDeleted(candidate_id))
-                            top_candidates.emplace(dist1, candidate_id);
+                            if (!isMarkedDeleted(candidate_id))
+                                top_candidates.emplace(dist1, candidate_id);
 
-                        if (top_candidates.size() > ef_construction_)
-                            top_candidates.pop();
+                            if (top_candidates.size() > ef_construction_)
+                                top_candidates.pop();
 
-                        if (!top_candidates.empty())
-                            lowerBound = top_candidates.top().first;
+                            if (!top_candidates.empty())
+                                lowerBound = top_candidates.top().first;
+                        }
                     }
                 }
             }
@@ -347,6 +372,7 @@ namespace hnswlib {
                 dist_t dist = fstdistfunc_(data_point, ep_data, dist_func_param_);
                 lowerBound = dist;
                 top_candidates.emplace(dist, ep_id);
+                // if语句不执行
                 if (!bare_bone_search && stop_condition) {
                     stop_condition->add_point_to_result(getExternalLabel(ep_id), ep_data, dist);
                 }
@@ -365,7 +391,7 @@ namespace hnswlib {
                 bool flag_stop_search;
                 if (bare_bone_search) {
                     flag_stop_search = candidate_dist > lowerBound;
-                } else {
+                } else { // else语句不执行
                     if (stop_condition) {
                         flag_stop_search = stop_condition->should_stop_search(candidate_dist, lowerBound);
                     } else {
@@ -453,7 +479,7 @@ namespace hnswlib {
                     }
                 }
             }
-            std::cout<<"count: "<<count<<std::endl;
+//            std::cout<<"count: "<<count<<std::endl;
             visited_list_pool_->releaseVisitedList(vl);
             return top_candidates;
         }
@@ -482,9 +508,13 @@ namespace hnswlib {
                 bool good = true;
 
                 for (std::pair<dist_t, tableint> second_pair : return_list) {
+//                    dist_t curdist =
+//                            fstdistfunc_(getDataByInternalId(second_pair.second),
+//                                         getDataByInternalId(curent_pair.second),
+//                                         dist_func_param_);
                     dist_t curdist =
-                            fstdistfunc_(getDataByInternalId(second_pair.second),
-                                         getDataByInternalId(curent_pair.second),
+                            fstdistfunc_(this->index_to_data[second_pair.second].back(),
+                                         this->index_to_data[curent_pair.second].back(),
                                          dist_func_param_);
                     if (curdist < dist_to_query) {
                         good = false;
@@ -609,15 +639,19 @@ namespace hnswlib {
                         setListCount(ll_other, sz_link_list_other + 1);
                     } else {
                         // finding the "weakest" element to replace it with the new one
-                        dist_t d_max = fstdistfunc_(getDataByInternalId(cur_c), getDataByInternalId(selectedNeighbors[idx]),
-                                                    dist_func_param_);
+//                        dist_t d_max = fstdistfunc_(getDataByInternalId(cur_c), getDataByInternalId(selectedNeighbors[idx]),
+//                                                    dist_func_param_);
+                        dist_t d_max = fstdistfunc_(this->index_to_data[cur_c].back(), this->index_to_data[selectedNeighbors[idx]].back(), dist_func_param_);
                         // Heuristic:
                         std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> candidates;
                         candidates.emplace(d_max, cur_c);
 
                         for (size_t j = 0; j < sz_link_list_other; j++) {
+//                            candidates.emplace(
+//                                    fstdistfunc_(getDataByInternalId(data[j]), getDataByInternalId(selectedNeighbors[idx]),
+//                                                 dist_func_param_), data[j]);
                             candidates.emplace(
-                                    fstdistfunc_(getDataByInternalId(data[j]), getDataByInternalId(selectedNeighbors[idx]),
+                                    fstdistfunc_(this->index_to_data[data[j]].back(), this->index_to_data[selectedNeighbors[idx]].back(),
                                                  dist_func_param_), data[j]);
                         }
 
@@ -1221,11 +1255,14 @@ namespace hnswlib {
             tableint currObj = enterpoint_node_;
             tableint enterpoint_copy = enterpoint_node_;
 
+            // 将数据copy到vector中
             memset(data_level0_memory_ + cur_c * size_data_per_element_ + offsetLevel0_, 0, size_data_per_element_);
+            this->index_to_data[cur_c].emplace_front(this->vector_data + cur_c*data_size_);
 
             // Initialisation of the data and label
             memcpy(getExternalLabeLp(cur_c), &label, sizeof(labeltype));
-            memcpy(getDataByInternalId(cur_c), data_point, data_size_);
+//            memcpy(getDataByInternalId(cur_c), data_point, data_size_);
+            memcpy(this->index_to_data[cur_c].back(), data_point, data_size_);
 
             if (curlevel) {
                 linkLists_[cur_c] = (char *) malloc(size_links_per_element_ * curlevel + 1);
@@ -1251,12 +1288,21 @@ namespace hnswlib {
                                 tableint cand = datal[i];
                                 if (cand < 0 || cand > max_elements_)
                                     throw std::runtime_error("cand error");
-                                dist_t d = fstdistfunc_(data_point, getDataByInternalId(cand), dist_func_param_);
-                                if (d < curdist) {
-                                    curdist = d;
-                                    currObj = cand;
-                                    changed = true;
+                                for (auto& info : this->index_to_data[cand])
+                                {
+                                    dist_t d = fstdistfunc_(data_point, info, dist_func_param_);
+                                    if (d < curdist) {
+                                        curdist = d;
+                                        currObj = cand;
+                                        changed = true;
+                                    }
                                 }
+//                                dist_t d = fstdistfunc_(data_point, getDataByInternalId(cand), dist_func_param_);
+//                                if (d < curdist) {
+//                                    curdist = d;
+//                                    currObj = cand;
+//                                    changed = true;
+//                                }
                             }
                         }
                     }
@@ -1269,10 +1315,17 @@ namespace hnswlib {
 
                     std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates = searchBaseLayer(
                             currObj, data_point, level);
+                    // if语句的true不执行
                     if (epDeleted) {
-                        top_candidates.emplace(fstdistfunc_(data_point, getDataByInternalId(enterpoint_copy), dist_func_param_), enterpoint_copy);
-                        if (top_candidates.size() > ef_construction_)
-                            top_candidates.pop();
+                        for (auto& info: this->index_to_data[enterpoint_copy])
+                        {
+                            top_candidates.emplace(fstdistfunc_(data_point, info, dist_func_param_), enterpoint_copy);
+                            if (top_candidates.size() > ef_construction_)
+                                top_candidates.pop();
+                        }
+//                        top_candidates.emplace(fstdistfunc_(data_point, getDataByInternalId(enterpoint_copy), dist_func_param_), enterpoint_copy);
+//                        if (top_candidates.size() > ef_construction_)
+//                            top_candidates.pop();
                     }
                     currObj = mutuallyConnectNewElement(data_point, cur_c, top_candidates, level, false);
                 }
@@ -1297,7 +1350,8 @@ namespace hnswlib {
             if (cur_element_count == 0) return result;
 
             tableint currObj = enterpoint_node_;
-            dist_t curdist = fstdistfunc_(query_data, getDataByInternalId(enterpoint_node_), dist_func_param_);
+//            dist_t curdist = fstdistfunc_(query_data, getDataByInternalId(enterpoint_node_), dist_func_param_);
+            dist_t curdist = fstdistfunc_(query_data, this->index_to_data.at(enterpoint_node_).back(), dist_func_param_);
 
             for (int level = maxlevel_; level > 0; level--) {
                 bool changed = true;
@@ -1315,8 +1369,8 @@ namespace hnswlib {
                         tableint cand = datal[i];
                         if (cand < 0 || cand > max_elements_)
                             throw std::runtime_error("cand error");
-                        dist_t d = fstdistfunc_(query_data, getDataByInternalId(cand), dist_func_param_);
-
+//                        dist_t d = fstdistfunc_(query_data, getDataByInternalId(cand), dist_func_param_);
+                        dist_t d = fstdistfunc_(query_data, this->index_to_data.at(cand).back(), dist_func_param_);
                         if (d < curdist) {
                             curdist = d;
                             currObj = cand;
