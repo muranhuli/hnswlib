@@ -3,14 +3,17 @@
 
 int main()
 {
-    int dim = 16;               // Dimension of the elements
-    int max_elements = 100000;   // Maximum number of elements, should be known beforehand
-    int M = 16;                 // Tightly connected with internal dimensionality of the data
+    int dim =16;               // Dimension of the elements
+    int max_elements = 10000;   // Maximum number of elements, should be known beforehand
+    int M = 32;                 // Tightly connected with internal dimensionality of the data
     // strongly affects the memory consumption
     int ef_construction = 200;  // Controls index search speed/build speed tradeoff
 
-    float disThreshold = 0.3;
-    int maxNum = 100;
+    float disThreshold = 20;
+    int maxNum = 200;
+
+    std::cout<<"dim="<<dim<<" max_elements="<<max_elements<<" M="<<M<<" ef_construction="<<ef_construction<<std::endl;
+    std::cout<<"disThreshold="<<disThreshold<<" maxNum="<<maxNum<<std::endl;
 
     // Initing index
     hnswlib::L2Space space(dim);
@@ -33,26 +36,35 @@ int main()
     auto start = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < max_elements; i++)
     {
+        // std::cout<<"\raddPoint "<<i<<"/"<<max_elements;
+        // std::cout.flush();
         // 首先找最小点
         std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(data + i * dim, 1);
         if (result.empty() or
-            !alg_hnsw->addPointToSuperNode(data + i * dim, alg_hnsw->node2SuperNode.at(result.top().second),
+            !alg_hnsw->addPointToSuperNode(data + i * dim, alg_hnsw->node2SuperNode[result.top().second],
                                            disThreshold, maxNum))
             alg_hnsw->addPoint(data + i * dim, i);
     }
+    std::cout<<std::endl;
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> duration = end - start;
-    std::cout << "运行时间: " << duration.count() << "秒" << std::endl;
+    std::cout << "构图时间: " << duration.count() << "秒" << std::endl;
 
+    // std::cout<<alg_hnsw->node2SuperNode[0]<<std::endl;
 
     // supernode size
-    std::cout << "The size of supernode is " << alg_hnsw->super_node_set_.size() << std::endl;
+    // std::cout << "The size of supernode is " << alg_hnsw->super_node_set_.size() << std::endl;
+    alg_hnsw->calculateSpaceCost();
 
     start = std::chrono::high_resolution_clock::now();
     // Query the elements for themselves and measure recall
     float correct = 0;
     for (int i = 0; i < max_elements; i++)
     {
+        // std::cout<<"\rann "<<i<<"/"<<max_elements;
+        // std::cout.flush();
+        if (i==12)
+            int a =1;
         std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(data + i * dim, 1);
         hnswlib::labeltype label = result.top().second;
         if (label == i) correct++;
@@ -62,11 +74,12 @@ int main()
         //     std::cout<<"dist = "<<result.top().first<<std::endl;
         // }
     }
+    std::cout<<std::endl;
     float recall = correct / max_elements;
     std::cout << "Recall: " << recall << "\n";
     end = std::chrono::high_resolution_clock::now();
     duration = end - start;
-    std::cout << "运行时间: " << duration.count() << "秒" << std::endl;
+    std::cout << "查询时间: " << duration.count() << "秒" << std::endl;
 
     // Serialize index
     // std::string hnsw_path = "hnsw.bin";
