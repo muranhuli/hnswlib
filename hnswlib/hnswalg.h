@@ -460,7 +460,7 @@ namespace hnswlib
             std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates;
             std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> candidate_set;
 
-            dist_t lowerBound;
+            dist_t lowerBound = INT64_MAX;
             if (bare_bone_search ||
                 (!isMarkedDeleted(ep_id) && ((!isIdAllowed) || (*isIdAllowed)(getExternalLabel(ep_id)))))
             {
@@ -472,7 +472,7 @@ namespace hnswlib
                     tableint cand = data[i];
                     char *ep_data = getDataByInternalId(cand);
                     dist_t dist = fstdistfunc_(data_point, ep_data, dist_func_param_);
-                    lowerBound = dist;
+                    lowerBound = std::min(dist,lowerBound);
                     top_candidates.emplace(dist, cand);
                 }
                 // for (auto &cand: this->super_node_set_.at(ep_id))
@@ -489,6 +489,7 @@ namespace hnswlib
                 //                                         ep_data, lowerBound);
                 // }
                 candidate_set.emplace(-lowerBound, ep_id);
+                lowerBound = top_candidates.top().first;
             } else
             {
                 lowerBound = std::numeric_limits<dist_t>::max();
@@ -565,6 +566,7 @@ namespace hnswlib
 
                             char *currObj1 = (getDataByInternalId(cand));
                             dist_t dist = fstdistfunc_(data_point, currObj1, dist_func_param_);
+                            minDist = std::min(minDist, dist);
 
                             bool flag_consider_candidate;
                             if (!bare_bone_search && stop_condition)
@@ -590,7 +592,6 @@ namespace hnswlib
                                      ((!isIdAllowed) || (*isIdAllowed)(getExternalLabel(candidate_id)))))
                                 {
                                     top_candidates.emplace(dist, cand);
-                                    minDist = std::min(minDist, dist);
                                     if (!bare_bone_search && stop_condition)
                                     {
                                         stop_condition->add_point_to_result(getExternalLabel(candidate_id), currObj1,
@@ -913,21 +914,42 @@ namespace hnswlib
             return level == 0 ? get_linklist0(internal_id) : get_linklist(internal_id, level);
         }
 
-        dist_t distanceBetweenSuperNodes(tableint internal_id1, tableint internal_id2) const
+        dist_t distanceBetweenSuperNodes(tableint internal_id1, tableint internal_id2, std::string method="min") const
         {
-            dist_t dist = INT64_MAX;
-            tableint *data1 = getSuperNodePos(internal_id1);
-            size_t len1 = getSuperNodeCount(internal_id1);
-            tableint *data2 = getSuperNodePos(internal_id2);
-            size_t len2 = getSuperNodeCount(internal_id2);
-            for (size_t i = 0; i < len1; i++)
+            if (method == "min")
             {
-                for (size_t j = 0; j < len2; j++)
+                dist_t dist = INT64_MAX;
+                tableint *data1 = getSuperNodePos(internal_id1);
+                size_t len1 = getSuperNodeCount(internal_id1);
+                tableint *data2 = getSuperNodePos(internal_id2);
+                size_t len2 = getSuperNodeCount(internal_id2);
+                for (size_t i = 0; i < len1; i++)
                 {
-                    dist = std::min(dist, fstdistfunc_(getDataByInternalId(data1[i]), getDataByInternalId(data2[j]), dist_func_param_));
+                    for (size_t j = 0; j < len2; j++)
+                    {
+                        dist = std::min(dist, fstdistfunc_(getDataByInternalId(data1[i]), getDataByInternalId(data2[j]),
+                                                           dist_func_param_));
+                    }
                 }
+                return dist;
             }
-            return dist;
+            else if (method == "max")
+            {
+                dist_t dist = INT64_MIN;
+                tableint *data1 = getSuperNodePos(internal_id1);
+                size_t len1 = getSuperNodeCount(internal_id1);
+                tableint *data2 = getSuperNodePos(internal_id2);
+                size_t len2 = getSuperNodeCount(internal_id2);
+                for (size_t i = 0; i < len1; i++)
+                {
+                    for (size_t j = 0; j < len2; j++)
+                    {
+                        dist = std::max(dist, fstdistfunc_(getDataByInternalId(data1[i]), getDataByInternalId(data2[j]),
+                                                           dist_func_param_));
+                    }
+                }
+                return dist;
+            }
         }
 
 
@@ -1032,7 +1054,8 @@ namespace hnswlib
                         //                             getDataByInternalId(
                         //                                     getNodeFromSuperNode(selectedNeighbors[idx])),
                         //                             dist_func_param_);
-                        dist_t d_max = distanceBetweenSuperNodes(cur_c, selectedNeighbors[idx]);
+                        dist_t d_max = distanceBetweenSuperNodes(cur_c, selectedNeighbors[idx], "max");
+                        // dist_t d_max = distanceBetweenSuperNodes(cur_c, selectedNeighbors[idx]);
 
                         // dist_t d_max = INT64_MAX;
                         // tableint *data = getSuperNodePos(selectedNeighbors[idx]);
