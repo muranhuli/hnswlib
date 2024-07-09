@@ -10,6 +10,10 @@ include(CheckCXXCompilerFlag)
 
 # Find HDF5 library
 find_package(HDF5 REQUIRED COMPONENTS C CXX)
+message(STATUS "HDF5 Include Dirs: ${HDF5_INCLUDE_DIRS}")
+message(STATUS "HDF5 Libraries: ${HDF5_LIBRARIES}")
+message(STATUS "HDF5 C Libraries: ${HDF5_C_LIBRARIES}")
+message(STATUS "HDF5 CXX Libraries: ${HDF5_CXX_LIBRARIES}")
 
 add_library(hnswlib INTERFACE)
 add_library(hnswlib::hnswlib ALIAS hnswlib)
@@ -18,6 +22,9 @@ target_include_directories(hnswlib INTERFACE
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
         ${HDF5_INCLUDE_DIRS})
+
+# 添加 HDF5 头文件目录
+include_directories(${HDF5_INCLUDE_DIRS})
 
 # Install
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/hnswlib
