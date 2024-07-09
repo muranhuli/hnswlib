@@ -9,11 +9,25 @@
 #include <unordered_set>
 #include <list>
 #include <memory>
+#include <vector>
 
 namespace hnswlib
 {
     typedef unsigned int tableint;
     typedef unsigned int linklistsizeint;
+
+    template<typename dist_t>
+    struct SuperNode{
+        tableint id;
+        std::vector<float> center_point;
+        std::vector<tableint> contain_points_list;
+        dist_t radius;
+        SuperNode(){}
+        SuperNode(tableint id) : id(id){}
+        void add_point(tableint point_id){
+            contain_points_list.emplace_back(point_id);
+        }
+    };
 
     template<typename dist_t>
     class HierarchicalNSW : public AlgorithmInterface<dist_t>
@@ -71,6 +85,18 @@ namespace hnswlib
 
         std::mutex deleted_elements_lock;  // lock for deleted_elements
         std::unordered_set<tableint> deleted_elements;  // contains internal ids of deleted elements
+
+        // 自定义数据结构
+        struct Node
+        {
+            tableint id;
+            std::vector<float> center_point;
+            std::vector<tableint> contain_points_list;
+            dist_t radius;
+            Node(tableint id) : id(id){}
+
+        };
+
 
 
         HierarchicalNSW(SpaceInterface<dist_t> *s)
