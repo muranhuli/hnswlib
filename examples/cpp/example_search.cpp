@@ -1,4 +1,5 @@
 #include "../../hnswlib/hnswlib.h"
+#include <H5Cpp.h>
 
 
 int main() {

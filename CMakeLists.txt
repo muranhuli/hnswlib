@@ -3,15 +3,21 @@ cmake_minimum_required(VERSION 3.0...3.26)
 project(hnswlib
     LANGUAGES CXX)
 
+message(STATUS "C++ compiler ID: ${CMAKE_CXX_COMPILER_ID}")
+
 include(GNUInstallDirs)
 include(CheckCXXCompilerFlag)
+
+# Find HDF5 library
+find_package(HDF5 REQUIRED COMPONENTS C CXX)
 
 add_library(hnswlib INTERFACE)
 add_library(hnswlib::hnswlib ALIAS hnswlib)
 
 target_include_directories(hnswlib INTERFACE
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+        ${HDF5_INCLUDE_DIRS})
 
 # Install
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/hnswlib
@@ -48,7 +54,13 @@ if(HNSWLIB_EXAMPLES)
         endif()
       endif()
     elseif (CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-      SET( CMAKE_CXX_FLAGS  "-Ofast -lrt -std=c++11 -DHAVE_CXX0X -march=native -fpic -w -fopenmp -ftree-vectorize -ftree-vectorizer-verbose=0" )
+        if(CMAKE_BUILD_TYPE MATCHES "Debug")
+            SET( CMAKE_CXX_FLAGS  "-g -std=c++11 -DHAVE_CXX0X -fpic -ftree-vectorize" )
+            message("Debug mode")
+        else ()
+            SET( CMAKE_CXX_FLAGS  "-Ofast -lrt -std=c++11 -DHAVE_CXX0X -march=native -fpic -w -fopenmp -ftree-vectorize -ftree-vectorizer-verbose=0" )
+            message("Release mode")
+        endif ()
     elseif (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
       SET( CMAKE_CXX_FLAGS  "/O2 -DHAVE_CXX0X /W1 /openmp /EHsc" )
     endif()
