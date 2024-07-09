@@ -1,10 +1,11 @@
 import subprocess
-import os
 from concurrent.futures import ProcessPoolExecutor, as_completed
+
 
 def run_command(command, cwd=None):
     result = subprocess.run(command, shell=True, capture_output=True, text=True, cwd=cwd)
     return result.stdout, result.stderr
+
 
 if __name__ == "__main__":
     commands = [
@@ -16,8 +17,9 @@ if __name__ == "__main__":
 
     commands = [
         "./cmake-build-release/example_search 32 200 70 200",
-        "./cmake-build-release/example_search 32 200 80000 200",
-        "./cmake-build-release/example_search 32 200 320000 200"
+        "./cmake-build-release/example_search 32 200 800000 200",
+        "./cmake-build-release/example_search 32 200 3200000 200",
+        "./cmake-build-release/example_search 32 200 4800000 200",
     ]
 
     with ProcessPoolExecutor() as executor:

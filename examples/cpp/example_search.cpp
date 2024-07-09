@@ -8,10 +8,10 @@ int main(int argc, char **argv)
 
     int M = std::stoi(argv[1]);                 // Tightly connected with internal dimensionality of the data
     int ef_construction = std::stoi(argv[2]);  // Controls index search speed/build speed tradeoff
-    float disThreshold = std::stoi(argv[3]) ;
+    float disThreshold = std::stof(argv[3]) ;
     int maxNum = std::stoi(argv[4]);
 
-    const H5std_string FILE_NAME("/media/disk7T/liuyu/hdf5/fashion-mnist-784-euclidean.hdf5");
+    const H5std_string FILE_NAME("/media/disk7T/liuyu/hdf5/sift-128-euclidean.hdf5");
     const H5std_string TRAIN_DATASET_NAME("/train");
     H5::H5File file(FILE_NAME, H5F_ACC_RDONLY);
     H5::DataSet dataset = file.openDataSet(TRAIN_DATASET_NAME);
@@ -47,7 +47,6 @@ int main(int argc, char **argv)
                                            disThreshold, maxNum))
             alg_hnsw->addPoint(data + i * dim, i);
     }
-    std::cout << std::endl;
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> duration = end - start;
     std::cout << "构图时间: " << duration.count() << "秒" << std::endl;
@@ -105,7 +104,6 @@ int main(int argc, char **argv)
         float tmp_recall = static_cast<float>(intersection.size()) / static_cast<float>(neighbor.size());
         correct += tmp_recall;
     }
-    std::cout << std::endl;
     float recall = correct / test_max_elements;
     std::cout << "Recall: " << recall << "\n";
     end = std::chrono::high_resolution_clock::now();
