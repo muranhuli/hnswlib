@@ -3,9 +3,10 @@
 #include <set>
 
 
-int main() {
+int main()
+{
     int M = 16;                 // Tightly connected with internal dimensionality of the data
-                                // strongly affects the memory consumption
+    // strongly affects the memory consumption
     int ef_construction = 200;  // Controls index search speed/build speed tradeoff
 
     // 读取数据
@@ -24,10 +25,12 @@ int main() {
 
     // Initing index
     hnswlib::L2Space space(dim);
-    hnswlib::HierarchicalNSW<float>* alg_hnsw = new hnswlib::HierarchicalNSW<float>(&space, max_elements, M, ef_construction);
+    hnswlib::HierarchicalNSW<float> *alg_hnsw = new hnswlib::HierarchicalNSW<float>(&space, max_elements, M,
+                                                                                    ef_construction);
 
     // Add data to index
-    for (int i = 0; i < max_elements; i++) {
+    for (int i = 0; i < max_elements; i++)
+    {
         alg_hnsw->addPoint(data + i * dim, i);
     }
 
@@ -54,8 +57,9 @@ int main() {
 
     // Query the elements for themselves and measure recall
     float correct = 0;
-    for (int i = 0; i < test_max_elements; i++) {
-        int k =10;
+    for (int i = 0; i < test_max_elements; i++)
+    {
+        int k = 10;
         std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(data + i * dim, 1);
         //  result提取出来，用于计算recall
         std::set<int> result_label;
