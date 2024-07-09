@@ -10,7 +10,7 @@ int main()
     int ef_construction = 200;  // Controls index search speed/build speed tradeoff
 
     // 读取数据
-    const H5std_string FILE_NAME("/media/disk7T/liuyu/hdf5/sift-128-euclidean.hdf5");
+    const H5std_string FILE_NAME("/media/disk7T/liuyu/hdf5/fashion-mnist-784-euclidean.hdf5");
     const H5std_string TRAIN_DATASET_NAME("/train");
     H5::H5File file(FILE_NAME, H5F_ACC_RDONLY);
     H5::DataSet dataset = file.openDataSet(TRAIN_DATASET_NAME);
@@ -60,7 +60,7 @@ int main()
     for (int i = 0; i < test_max_elements; i++)
     {
         int k = 10;
-        std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(data + i * dim, 1);
+        std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(test_data + i * dim, k);
         //  result提取出来，用于计算recall
         std::set<int> result_label;
         while (!result.empty())
