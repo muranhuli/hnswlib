@@ -76,8 +76,9 @@ namespace hnswlib
         // 自定义数据结构
         std::vector<float> raw_vector_data_;
 
-        struct SuperNode
+        class SuperNode
         {
+        public:
             tableint id;
             std::vector<float> center_point;
             std::unordered_set<tableint> contain_points_list;
@@ -129,15 +130,25 @@ namespace hnswlib
             // 更新超点半径
             void update_radius()
             {
-                // 任意一个顶点到中心点的距离都是一样的
-                radius = parent->fstdistfunc_(center_point.data(),
-                                              parent->getDataByInternalId(*contain_points_list.begin()),
-                                              parent->dist_func_param_);
+                // 获取所有顶点到中心点的最大值
+                dist_t max_dis = 0;
+                for (tableint point_id: contain_points_list)
+                {
+                    auto point_data = (float *) parent->getDataByInternalId(point_id);
+                    dist_t dis = parent->fstdistfunc_(center_point.data(), point_data, parent->dist_func_param_);
+                    max_dis = std::max(max_dis, dis);
+                }
+                radius = max_dis;
+            }
+            void distance(SuperNode *other)
+            {
+                dist_t dis = parent->fstdistfunc_(center_point.data(), other->center_point.data(), parent->dist_func_param_);
             }
         };
 
         std::vector<SuperNode *> super_node_list_;
         std::vector<tableint> node_to_super_node_;
+        tableint cur_super_node_count{0};
 
         float disThreshold{0};
         size_t max_nodes_in_supernode{0};
@@ -374,8 +385,8 @@ namespace hnswlib
                 size_t size = getListCount((linklistsizeint *) data);
                 tableint *datal = (tableint *) (data + 1);
 #ifdef USE_SSE
-                _mm_prefetch((char *) (visited_array + *(data + 1)), _MM_HINT_T0);
-                _mm_prefetch((char *) (visited_array + *(data + 1) + 64), _MM_HINT_T0);
+                _mm_prefetch((visited_array + *(data + 1)), _MM_HINT_T0);
+                _mm_prefetch((visited_array + *(data + 1) + 64), _MM_HINT_T0);
                 _mm_prefetch(getDataByInternalId(*datal), _MM_HINT_T0);
                 _mm_prefetch(getDataByInternalId(*(datal + 1)), _MM_HINT_T0);
 #endif
@@ -385,7 +396,7 @@ namespace hnswlib
                     tableint candidate_id = *(datal + j);
 //                    if (candidate_id == 0) continue;
 #ifdef USE_SSE
-                    _mm_prefetch((char *) (visited_array + *(datal + j + 1)), _MM_HINT_T0);
+                    _mm_prefetch((visited_array + *(datal + j + 1)), _MM_HINT_T0);
                     _mm_prefetch(getDataByInternalId(*(datal + j + 1)), _MM_HINT_T0);
 #endif
                     if (visited_array[candidate_id] == visited_array_tag) continue;
@@ -491,10 +502,11 @@ namespace hnswlib
                 }
 
 #ifdef USE_SSE
-                _mm_prefetch((char *) (visited_array + *(data + 1)), _MM_HINT_T0);
-                _mm_prefetch((char *) (visited_array + *(data + 1) + 64), _MM_HINT_T0);
-                _mm_prefetch(data_level0_memory_ + (*(data + 1)) * size_data_per_element_ + offsetData_, _MM_HINT_T0);
-                _mm_prefetch((char *) (data + 2), _MM_HINT_T0);
+                _mm_prefetch((visited_array + *(data + 1)), _MM_HINT_T0);
+                _mm_prefetch((visited_array + *(data + 1) + 64), _MM_HINT_T0);
+                _mm_prefetch((void *) (data_level0_memory_ + (*(data + 1)) * size_data_per_element_ + offsetData_),
+                             _MM_HINT_T0);
+                _mm_prefetch((data + 2), _MM_HINT_T0);
 #endif
 
                 for (size_t j = 1; j <= size; j++)
@@ -502,9 +514,10 @@ namespace hnswlib
                     int candidate_id = *(data + j);
 //                    if (candidate_id == 0) continue;
 #ifdef USE_SSE
-                    _mm_prefetch((char *) (visited_array + *(data + j + 1)), _MM_HINT_T0);
-                    _mm_prefetch(data_level0_memory_ + (*(data + j + 1)) * size_data_per_element_ + offsetData_,
-                                 _MM_HINT_T0);  ////////////
+                    _mm_prefetch((visited_array + *(data + j + 1)), _MM_HINT_T0);
+                    _mm_prefetch(
+                            (void *) (data_level0_memory_ + (*(data + j + 1)) * size_data_per_element_ + offsetData_),
+                            _MM_HINT_T0);  ////////////
 #endif
                     if (!(visited_array[candidate_id] == visited_array_tag))
                     {
@@ -526,8 +539,9 @@ namespace hnswlib
                         {
                             candidate_set.emplace(-dist, candidate_id);
 #ifdef USE_SSE
-                            _mm_prefetch(data_level0_memory_ + candidate_set.top().second * size_data_per_element_ +
-                                         offsetLevel0_,  ///////////
+                            _mm_prefetch((void *) (data_level0_memory_ +
+                                                   candidate_set.top().second * size_data_per_element_ +
+                                                   offsetLevel0_),  ///////////
                                          _MM_HINT_T0);  ////////////////////////
 #endif
 
@@ -1143,10 +1157,24 @@ namespace hnswlib
             *((unsigned short int *) (ptr)) = *((unsigned short int *) &size);
         }
 
-        void addPointToSuperNode(const void *data_point, tableint superNode)
+        bool addPointToSuperNode(const void *data_point, tableint superNode)
         {
             // 一个顶点被插入超边，需要保证这个顶点与超点中心距离不超过超点半径，即这是一个球形超点
-
+            // 检查插入点与超点中心之间的距离是否满足阈值
+            dist_t dist = fstdistfunc_(data_point, this->super_node_list_[superNode]->center_point.data(),
+                                       dist_func_param_);
+            if (dist > disThreshold)
+                return false;
+            if (this->super_node_list_.at(superNode)->contain_points_list.size()>=max_nodes_in_supernode)
+                return false;
+            // 将顶点添加至超点内
+            tableint cur_c = cur_element_count;
+            cur_element_count++;
+            memcpy(getDataByInternalId(cur_c), data_point, data_size_);
+            this->node_to_super_node_[cur_c] = superNode;
+            SuperNode* superNode_ptr= this->super_node_list_.at(superNode);
+            superNode_ptr->add_point(cur_c);
+            return true;
         }
 
 
@@ -1388,6 +1416,7 @@ namespace hnswlib
         tableint addPoint(const void *data_point, labeltype label, int level)
         {
             tableint cur_c = 0;
+            tableint cur_superNode = 0;
             {
                 // Checking if the element with the same label already exists
                 // if so, updating it *instead* of creating a new element.
@@ -1422,15 +1451,17 @@ namespace hnswlib
 
                 cur_c = cur_element_count;
                 cur_element_count++;
+                cur_superNode = cur_super_node_count;
+                cur_super_node_count++;
                 label_lookup_[label] = cur_c;
             }
 
-            std::unique_lock<std::mutex> lock_el(link_list_locks_[cur_c]);
+            std::unique_lock<std::mutex> lock_el(link_list_locks_[cur_superNode]);
             int curlevel = getRandomLevel(mult_);
             if (level > 0)
                 curlevel = level;
 
-            element_levels_[cur_c] = curlevel;
+            element_levels_[cur_superNode] = curlevel;
 
             std::unique_lock<std::mutex> templock(global);
             int maxlevelcopy = maxlevel_;
@@ -1439,18 +1470,23 @@ namespace hnswlib
             tableint currObj = enterpoint_node_;
             tableint enterpoint_copy = enterpoint_node_;
 
-            memset(data_level0_memory_ + cur_c * size_data_per_element_ + offsetLevel0_, 0, size_data_per_element_);
+            memset(data_level0_memory_ + cur_superNode * size_data_per_element_ + offsetLevel0_, 0, size_data_per_element_);
 
             // Initialisation of the data and label
-            memcpy(getExternalLabeLp(cur_c), &label, sizeof(labeltype));
+            memcpy(getExternalLabeLp(cur_superNode), &label, sizeof(labeltype));
             memcpy(getDataByInternalId(cur_c), data_point, data_size_);
+
+            // Add the point to the super node
+            this->node_to_super_node_[cur_c] = cur_superNode;
+            SuperNode* superNode_ptr= this->super_node_list_.at(cur_superNode);
+            superNode_ptr->add_point(cur_c);
 
             if (curlevel)
             {
-                linkLists_[cur_c] = (char *) malloc(size_links_per_element_ * curlevel + 1);
-                if (linkLists_[cur_c] == nullptr)
+                linkLists_[cur_superNode] = (char *) malloc(size_links_per_element_ * curlevel + 1);
+                if (linkLists_[cur_superNode] == nullptr)
                     throw std::runtime_error("Not enough memory: addPoint failed to allocate linklist");
-                memset(linkLists_[cur_c], 0, size_links_per_element_ * curlevel + 1);
+                memset(linkLists_[cur_superNode], 0, size_links_per_element_ * curlevel + 1);
             }
 
             if ((signed) currObj != -1)

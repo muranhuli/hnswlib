@@ -23,12 +23,17 @@ int main()
     hnswlib::L2Space space(dim);
     auto *alg_hnsw = new hnswlib::HierarchicalNSW<float>(&space, max_elements, disThreshold,
                                                          maxNum, M,
-                                                                                    ef_construction);
+                                                         ef_construction);
 
     // Add data to index
     for (int i = 0; i < max_elements; i++)
     {
-        alg_hnsw->addPoint(data.get() + i * dim, i);
+        std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(data.get() + i * dim, 1);
+        if (result.empty() or
+            !alg_hnsw->addPointToSuperNode(data.get() + i * dim, alg_hnsw->node_to_super_node_[result.top().second]))
+        {
+            alg_hnsw->addPoint(data.get() + i * dim, i);
+        }
     }
 
     auto test_data = DataRead::read_hdf5_float("/media/disk7T/liuyu/hdf5/fashion-mnist-784-euclidean.hdf5", "/test",
