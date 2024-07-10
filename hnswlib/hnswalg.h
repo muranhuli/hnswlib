@@ -17,19 +17,6 @@ namespace hnswlib
     typedef unsigned int linklistsizeint;
 
     template<typename dist_t>
-    struct SuperNode{
-        tableint id;
-        std::vector<float> center_point;
-        std::vector<tableint> contain_points_list;
-        dist_t radius;
-        SuperNode(){}
-        SuperNode(tableint id) : id(id){}
-        void add_point(tableint point_id){
-            contain_points_list.emplace_back(point_id);
-        }
-    };
-
-    template<typename dist_t>
     class HierarchicalNSW : public AlgorithmInterface<dist_t>
     {
     public:
@@ -87,16 +74,70 @@ namespace hnswlib
         std::unordered_set<tableint> deleted_elements;  // contains internal ids of deleted elements
 
         // 自定义数据结构
-        struct Node
+        std::vector<float> raw_vector_data_;
+
+        struct SuperNode
         {
             tableint id;
             std::vector<float> center_point;
-            std::vector<tableint> contain_points_list;
+            std::unordered_set<tableint> contain_points_list;
             dist_t radius;
-            Node(tableint id) : id(id){}
+            HierarchicalNSW<dist_t> *parent;
 
+            SuperNode() : parent(nullptr)
+            {}
+
+            SuperNode(tableint id_, HierarchicalNSW<dist_t> *parent)
+            {
+                this->id = id_;
+                this->parent = parent;
+                center_point.resize(*((size_t *) this->parent->dist_func_param_));
+                center_point.assign(center_point.size(), 0.0f);
+            }
+
+            /// 将一个普通顶点合并至超点
+            /// \param point_id 需要合并普通顶点id
+            void add_point(tableint point_id)
+            {
+                // 超点包含的普通顶点id需要被添加
+                contain_points_list.insert(point_id);
+                // 更新超点的中心点
+                update_center_point();
+                // 更新超点的半径
+                update_radius();
+
+            }
+
+            // 更新超点中心点
+            void update_center_point()
+            {
+                center_point.assign(center_point.size(), 0.0f);
+                for (tableint point_id: contain_points_list)
+                {
+                    auto point_data = (float *) parent->getDataByInternalId(point_id);
+                    for (size_t i = 0; i < *((size_t *) this->parent->dist_func_param_); i++)
+                    {
+                        center_point[i] += point_data[i];
+                    }
+                }
+                for (float &i: center_point)
+                {
+                    i /= contain_points_list.size();
+                }
+            }
+
+            // 更新超点半径
+            void update_radius()
+            {
+                // 任意一个顶点到中心点的距离都是一样的
+                radius = parent->fstdistfunc_(center_point.data(),
+                                              parent->getDataByInternalId(*contain_points_list.begin()),
+                                              parent->dist_func_param_);
+            }
         };
 
+        std::vector<SuperNode *> super_node_list_;
+        std::vector<tableint> node_to_super_node_;
 
 
         HierarchicalNSW(SpaceInterface<dist_t> *s)
@@ -151,9 +192,9 @@ namespace hnswlib
             update_probability_generator_.seed(random_seed + 1);
 
             size_links_level0_ = maxM0_ * sizeof(tableint) + sizeof(linklistsizeint);
-            size_data_per_element_ = size_links_level0_ + data_size_ + sizeof(labeltype);
+            size_data_per_element_ = size_links_level0_ + sizeof(labeltype);
             offsetData_ = size_links_level0_;
-            label_offset_ = size_links_level0_ + data_size_;
+            label_offset_ = size_links_level0_;
             offsetLevel0_ = 0;
 
             data_level0_memory_ = (char *) malloc(max_elements_ * size_data_per_element_);
@@ -174,6 +215,9 @@ namespace hnswlib
             size_links_per_element_ = maxM_ * sizeof(tableint) + sizeof(linklistsizeint);
             mult_ = 1 / log(1.0 * M_);
             revSize_ = 1.0 / mult_;
+
+            // 自定义数据
+            raw_vector_data_.resize(max_elements_ * (*((size_t *) dist_func_param_)), 0.0f);
         }
 
 
@@ -246,7 +290,9 @@ namespace hnswlib
 
         inline char *getDataByInternalId(tableint internal_id) const
         {
-            return (data_level0_memory_ + internal_id * size_data_per_element_ + offsetData_);
+            return (char *) (&raw_vector_data_[internal_id * (*((size_t *) this->dist_func_param_))]);
+            // return (char*)(raw_vector_data_.data()+internal_id*(*((size_t *)this->parent->dist_func_param_)));
+            // return (data_level0_memory_ + internal_id * size_data_per_element_ + offsetData_);
         }
 
 

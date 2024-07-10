@@ -1,10 +1,12 @@
 #include "../../hnswlib/hnswlib.h"
 #include <H5Cpp.h>
 #include <set>
+#include "../../hnswlib/utils.h"
 
 
 int main()
 {
+    Time t("All Time");
     int M = 16;                 // Tightly connected with internal dimensionality of the data
     // strongly affects the memory consumption
     int ef_construction = 200;  // Controls index search speed/build speed tradeoff
