@@ -6,8 +6,7 @@
 
 int main()
 {
-    Time t("All Time");
-    int M = 16;                 // Tightly connected with internal dimensionality of the data
+    int M = 32;                 // Tightly connected with internal dimensionality of the data
     // strongly affects the memory consumption
     int ef_construction = 200;  // Controls index search speed/build speed tradeoff
     float disThreshold = 300;
@@ -26,13 +25,16 @@ int main()
                                                          ef_construction);
 
     // Add data to index
-    for (int i = 0; i < max_elements; i++)
     {
-        std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(data.get() + i * dim, 1);
-        if (result.empty() or
-            !alg_hnsw->addPointToSuperNode(data.get() + i * dim, alg_hnsw->node_to_super_node_[result.top().second]))
+        Time time("Build Index");
+        for (int i = 0; i < max_elements; i++)
         {
-            alg_hnsw->addPoint(data.get() + i * dim, i);
+            // std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(data.get() + i * dim, 1);
+            // if (result.empty() or
+            //     !alg_hnsw->addPointToSuperNode(data.get() + i * dim, alg_hnsw->node_to_super_node_[result.top().second]))
+            {
+                alg_hnsw->addPoint(data.get() + i * dim, i);
+            }
         }
     }
 
@@ -47,29 +49,32 @@ int main()
 
     // Query the elements for themselves and measure recall
     float correct = 0;
-    for (int i = 0; i < test_max_elements; i++)
     {
-        int k = 10;
-        std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(
-                test_data.get() + i * dim, k);
-        //  result提取出来，用于计算recall
-        std::set<int> result_label;
-        while (!result.empty())
+        Time time("KNN Search");
+        for (int i = 0; i < test_max_elements; i++)
         {
-            result_label.insert(int(result.top().second));
-            result.pop();
+            int k = 10;
+            std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(
+                    test_data.get() + i * dim, k);
+            //  result提取出来，用于计算recall
+            std::set<int> result_label;
+            while (!result.empty())
+            {
+                result_label.insert(int(result.top().second));
+                result.pop();
+            }
+            // 读取真实的neighbor
+            std::set<int> neighbor;
+            for (int j = 0; j < k; j++)
+            {
+                neighbor.insert(neighbor_data[i * neighbor_dim + j]);
+            }
+            // 计算recall, 集合交集/neighbor数
+            std::set<int> intersection;
+            std::set_intersection(result_label.begin(), result_label.end(), neighbor.begin(), neighbor.end(),
+                                  std::inserter(intersection, intersection.begin()));
+            correct += static_cast<float>(intersection.size()) / static_cast<float>(neighbor.size());
         }
-        // 读取真实的neighbor
-        std::set<int> neighbor;
-        for (int j = 0; j < k; j++)
-        {
-            neighbor.insert(neighbor_data[i * neighbor_dim + j]);
-        }
-        // 计算recall, 集合交集/neighbor数
-        std::set<int> intersection;
-        std::set_intersection(result_label.begin(), result_label.end(), neighbor.begin(), neighbor.end(),
-                              std::inserter(intersection, intersection.begin()));
-        correct += static_cast<float>(intersection.size()) / static_cast<float>(neighbor.size());
     }
     float recall = correct / test_max_elements;
     std::cout << "Recall: " << recall << "\n";
