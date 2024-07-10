@@ -53,4 +53,50 @@ public:
     }
 };
 
+class DataRead
+{
+public:
+    static std::unique_ptr<float[]>
+    read_hdf5_float(const std::string &filename, const std::string &dataset_name, hsize_t *dims_out)
+    {
+        const H5std_string &FILE_NAME(filename);
+        const H5std_string &TRAIN_DATASET_NAME(dataset_name);
+        H5::H5File file(FILE_NAME, H5F_ACC_RDONLY);
+        H5::DataSet dataset = file.openDataSet(TRAIN_DATASET_NAME);
+        H5::DataSpace dataspace = dataset.getSpace();
+
+        // 输出数据的维度，个数
+        // hsize_t dims_out[2];
+        dataspace.getSimpleExtentDims(dims_out, NULL);
+        int dim = static_cast<int>(dims_out[1]);
+        int max_elements = static_cast<int>(dims_out[0]);
+
+        std::unique_ptr<float[]> data(new float[dim * max_elements]);
+        dataset.read(data.get(), H5::PredType::NATIVE_FLOAT, dataspace, dataspace);
+
+        return data;
+    }
+
+    static std::unique_ptr<int[]>
+    read_hdf5_int(const std::string &filename, const std::string &dataset_name, hsize_t *dims_out)
+    {
+        const H5std_string &FILE_NAME(filename);
+        const H5std_string &TRAIN_DATASET_NAME(dataset_name);
+        H5::H5File file(FILE_NAME, H5F_ACC_RDONLY);
+        H5::DataSet dataset = file.openDataSet(TRAIN_DATASET_NAME);
+        H5::DataSpace dataspace = dataset.getSpace();
+
+        // 输出数据的维度，个数
+        // hsize_t dims_out[2];
+        dataspace.getSimpleExtentDims(dims_out, NULL);
+        int dim = static_cast<int>(dims_out[1]);
+        int max_elements = static_cast<int>(dims_out[0]);
+
+        std::unique_ptr<int[]> data(new int[dim * max_elements]);
+        dataset.read(data.get(), H5::PredType::NATIVE_INT, dataspace, dataspace);
+
+        return data;
+    }
+};
+
 #endif //HNSWLIB_UTILS_H

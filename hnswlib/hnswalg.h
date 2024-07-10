@@ -139,6 +139,9 @@ namespace hnswlib
         std::vector<SuperNode *> super_node_list_;
         std::vector<tableint> node_to_super_node_;
 
+        float disThreshold{0};
+        size_t max_nodes_in_supernode{0};
+
 
         HierarchicalNSW(SpaceInterface<dist_t> *s)
         {
@@ -160,6 +163,8 @@ namespace hnswlib
         HierarchicalNSW(
                 SpaceInterface<dist_t> *s,
                 size_t max_elements,
+                float disThreshold,
+                size_t max_nodes_in_supernode,
                 size_t M = 16,
                 size_t ef_construction = 200,
                 size_t random_seed = 100,
@@ -170,6 +175,8 @@ namespace hnswlib
                   allow_replace_deleted_(allow_replace_deleted)
         {
             max_elements_ = max_elements;
+            disThreshold = disThreshold;
+            max_nodes_in_supernode = max_nodes_in_supernode;
             num_deleted_ = 0;
             data_size_ = s->get_data_size();
             fstdistfunc_ = s->get_dist_func();
@@ -1134,6 +1141,12 @@ namespace hnswlib
         void setListCount(linklistsizeint *ptr, unsigned short int size) const
         {
             *((unsigned short int *) (ptr)) = *((unsigned short int *) &size);
+        }
+
+        void addPointToSuperNode(const void *data_point, tableint superNode)
+        {
+            // 一个顶点被插入超边，需要保证这个顶点与超点中心距离不超过超点半径，即这是一个球形超点
+
         }
 
 
