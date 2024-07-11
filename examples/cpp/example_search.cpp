@@ -9,8 +9,8 @@ int main()
     int M = 32;                 // Tightly connected with internal dimensionality of the data
     // strongly affects the memory consumption
     int ef_construction = 200;  // Controls index search speed/build speed tradeoff
-    float disThreshold = 300;
-    size_t maxNum = 200;
+    float disThreshold = 800000;
+    size_t maxNum = 2;
 
     hsize_t dims_out[2];
     auto data = DataRead::read_hdf5_float("/media/disk7T/liuyu/hdf5/fashion-mnist-784-euclidean.hdf5", "/train",
@@ -29,19 +29,23 @@ int main()
         Time time("Build Index");
         for (int i = 0; i < max_elements; i++)
         {
-            // std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(data.get() + i * dim, 1);
-            // if (result.empty() or
-            //     !alg_hnsw->addPointToSuperNode(data.get() + i * dim, alg_hnsw->node_to_super_node_[result.top().second]))
+            std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(data.get() + i * dim, 1);
+            if (result.empty() or
+                !alg_hnsw->addPointToSuperNode(data.get() + i * dim, alg_hnsw->node_to_super_node_.at(result.top().second)))
             {
                 alg_hnsw->addPoint(data.get() + i * dim, i);
             }
+            else
+            {
+                std::cout<<"merge "<<i<<" to "<<result.top().second<<std::endl;
+            }
         }
     }
+    alg_hnsw->hnsw_graph_info_stats();
 
     auto test_data = DataRead::read_hdf5_float("/media/disk7T/liuyu/hdf5/fashion-mnist-784-euclidean.hdf5", "/test",
                                                dims_out);
     int test_max_elements = int(dims_out[0]);
-
     auto neighbor_data = DataRead::read_hdf5_int("/media/disk7T/liuyu/hdf5/fashion-mnist-784-euclidean.hdf5",
                                                  "/neighbors", dims_out);
     int neighbor_max_elements = int(dims_out[0]);

@@ -181,8 +181,8 @@ namespace hnswlib
         HierarchicalNSW(
                 SpaceInterface<dist_t> *s,
                 size_t max_elements,
-                float disThreshold,
-                size_t max_nodes_in_supernode,
+                float disThreshold_,
+                size_t max_nodes_in_supernode_,
                 size_t M = 16,
                 size_t ef_construction = 200,
                 size_t random_seed = 100,
@@ -193,8 +193,8 @@ namespace hnswlib
                   allow_replace_deleted_(allow_replace_deleted)
         {
             max_elements_ = max_elements;
-            disThreshold = disThreshold;
-            max_nodes_in_supernode = max_nodes_in_supernode;
+            disThreshold = disThreshold_;
+            max_nodes_in_supernode = max_nodes_in_supernode_;
             num_deleted_ = 0;
             data_size_ = s->get_data_size();
             fstdistfunc_ = s->get_dist_func();
@@ -243,7 +243,7 @@ namespace hnswlib
 
             // 自定义数据
             raw_vector_data_.resize(max_elements_ * (*((size_t *) dist_func_param_)), 0.0f);
-            node_to_super_node_.resize(max_elements,0);
+            node_to_super_node_.resize(max_elements_, 0);
         }
 
 
@@ -267,17 +267,55 @@ namespace hnswlib
             visited_list_pool_.reset(nullptr);
         }
 
+        void hnsw_graph_info_stats()
+        {
+            std::cout << "The size of superNode is " << cur_super_node_count << std::endl;
+            size_t sum_edge = 0;
+            for (size_t i = 0; i < cur_super_node_count; i++)
+            {
+                auto data = (int *) get_linklist0(i);
+                size_t size = getListCount((linklistsizeint *) data);
+                sum_edge += size;
+            }
+            std::cout << "The size of edge is " << sum_edge << std::endl;
+        }
+
         dist_t distance(tableint id1, tableint id2, const std::string &mode = "normal") const
         {
-            return this->super_node_list_.at(id1)->distance(this->super_node_list_.at(id2), mode);
+            // 求两个超边中任意两个顶点之间的最短距离
+            dist_t dist = INT64_MAX;
+            for (tableint point_id1: super_node_list_[id1]->contain_points_list)
+            {
+                for (tableint point_id2: super_node_list_[id2]->contain_points_list)
+                {
+                    dist_t dis = fstdistfunc_(getDataByInternalId(point_id1), getDataByInternalId(point_id2),
+                                              dist_func_param_);
+                    dist = std::min(dist, dis);
+                }
+            }
+            return dist;
+            // return this->super_node_list_.at(id1)->distance(this->super_node_list_.at(id2), mode);
             // return fstdistfunc_(getDataByInternalId(id1), getDataByInternalId(id2), dist_func_param_);
         }
 
         dist_t distance(const void *data, tableint id2, const std::string &mode = "normal") const
         {
+            dist_t dist = INT64_MAX;
+            for (const tableint & point_id2: super_node_list_.at(id2)->contain_points_list)
+            {
+                dist_t dis = fstdistfunc_(data, getDataByInternalId(point_id2),
+                                          dist_func_param_);
+                dist = std::min(dist, dis);
+            }
+            return  dist;
+            // if (mode == "normal")
+            //     return fstdistfunc_(data, this->super_node_list_.at(id2)->center_point.data(), dist_func_param_);
+            // else if (mode == "min")
+            // {
+            //     return fstdistfunc_(data, this->super_node_list_.at(id2)->center_point.data(), dist_func_param_) -
+            //            this->super_node_list_.at(id2)->radius;
+            // }
 
-            // return this->super_node_list_.at(id1)->distance(this->super_node_list_.at(id2), mode);
-            return fstdistfunc_(data, this->super_node_list_.at(id2)->center_point.data(), dist_func_param_);
         }
 
         struct CompareByFirst
@@ -473,7 +511,7 @@ namespace hnswlib
             {
                 char *ep_data = getDataByInternalId(ep_id);
                 // dist_t dist = fstdistfunc_(data_point, ep_data, dist_func_param_);
-                dist_t dist = distance(data_point, ep_id);
+                dist_t dist = distance(data_point, ep_id, "min");
                 lowerBound = dist;
                 top_candidates.emplace(dist, ep_id);
                 if (!bare_bone_search && stop_condition)
@@ -548,7 +586,7 @@ namespace hnswlib
 
                         // char *currObj1 = (getDataByInternalId(candidate_id));
                         // dist_t dist = fstdistfunc_(data_point, currObj1, dist_func_param_);
-                        dist_t dist = distance(data_point, candidate_id);
+                        dist_t dist = distance(data_point, candidate_id, "min");
                         bool flag_consider_candidate;
                         if (!bare_bone_search && stop_condition)
                         {
@@ -1187,11 +1225,11 @@ namespace hnswlib
         {
             // 一个顶点被插入超边，需要保证这个顶点与超点中心距离不超过超点半径，即这是一个球形超点
             // 检查插入点与超点中心之间的距离是否满足阈值
+            if (this->super_node_list_.at(superNode)->contain_points_list.size() >= max_nodes_in_supernode)
+                return false;
             dist_t dist = fstdistfunc_(data_point, this->super_node_list_[superNode]->center_point.data(),
                                        dist_func_param_);
             if (dist > disThreshold)
-                return false;
-            if (this->super_node_list_.at(superNode)->contain_points_list.size() >= max_nodes_in_supernode)
                 return false;
             // 将顶点添加至超点内
             tableint cur_c = cur_element_count;
@@ -1479,7 +1517,7 @@ namespace hnswlib
                 cur_element_count++;
                 cur_superNode = cur_super_node_count;
                 cur_super_node_count++;
-                label_lookup_[label] = cur_c;
+                label_lookup_[label] = cur_superNode;
             }
 
             std::unique_lock<std::mutex> lock_el(link_list_locks_[cur_superNode]);
@@ -1522,7 +1560,8 @@ namespace hnswlib
                 if (curlevel < maxlevelcopy)
                 {
                     // dist_t curdist = fstdistfunc_(data_point, getDataByInternalId(currObj), dist_func_param_);
-                    dist_t curdist = distance(cur_superNode, currObj);
+                    // dist_t curdist = distance(cur_superNode, currObj);
+                    dist_t curdist = distance(data_point, currObj);
                     for (int level = maxlevelcopy; level > curlevel; level--)
                     {
                         bool changed = true;
@@ -1541,7 +1580,8 @@ namespace hnswlib
                                 if (cand < 0 || cand > max_elements_)
                                     throw std::runtime_error("cand error");
                                 // dist_t d = fstdistfunc_(data_point, getDataByInternalId(cand), dist_func_param_);
-                                dist_t d = distance(cur_superNode, cand);
+                                // dist_t d = distance(cur_superNode, cand);
+                                dist_t d = distance(data_point, cand);
                                 if (d < curdist)
                                 {
                                     curdist = d;
@@ -1563,9 +1603,10 @@ namespace hnswlib
                             currObj, data_point, level);
                     if (epDeleted)
                     {
-                        top_candidates.emplace(
-                                fstdistfunc_(data_point, getDataByInternalId(enterpoint_copy), dist_func_param_),
-                                enterpoint_copy);
+                        // top_candidates.emplace(
+                        //         fstdistfunc_(data_point, getDataByInternalId(enterpoint_copy), dist_func_param_),
+                        //         enterpoint_copy);
+                        top_candidates.emplace(distance(data_point, enterpoint_copy), enterpoint_copy);
                         if (top_candidates.size() > ef_construction_)
                             top_candidates.pop();
                     }
@@ -1581,10 +1622,10 @@ namespace hnswlib
             // Releasing lock for the maximum level
             if (curlevel > maxlevelcopy)
             {
-                enterpoint_node_ = cur_c;
+                enterpoint_node_ = cur_superNode;
                 maxlevel_ = curlevel;
             }
-            return cur_c;
+            return cur_superNode;
         }
 
 
@@ -1596,7 +1637,7 @@ namespace hnswlib
 
             tableint currObj = enterpoint_node_;
             // dist_t curdist = fstdistfunc_(query_data, getDataByInternalId(enterpoint_node_), dist_func_param_);
-            dist_t curdist = distance(query_data, currObj);
+            dist_t curdist = distance(query_data, currObj, "min");
 
             for (int level = maxlevel_; level > 0; level--)
             {
@@ -1618,7 +1659,7 @@ namespace hnswlib
                         if (cand < 0 || cand > max_elements_)
                             throw std::runtime_error("cand error");
                         // dist_t d = fstdistfunc_(query_data, getDataByInternalId(cand), dist_func_param_);
-                        dist_t d = distance(query_data, cand);
+                        dist_t d = distance(query_data, cand, "min");
                         if (d < curdist)
                         {
                             curdist = d;
@@ -1629,16 +1670,30 @@ namespace hnswlib
                 }
             }
 
-            std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates;
+            std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> tmp_top_candidates;
             bool bare_bone_search = !num_deleted_ && !isIdAllowed;
             if (bare_bone_search)
             {
-                top_candidates = searchBaseLayerST<true>(
+                tmp_top_candidates = searchBaseLayerST<true>(
                         currObj, query_data, std::max(ef_construction_, k), isIdAllowed);
             } else
             {
-                top_candidates = searchBaseLayerST<false>(
+                tmp_top_candidates = searchBaseLayerST<false>(
                         currObj, query_data, std::max(ef_construction_, k), isIdAllowed);
+            }
+            std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates;
+            // 展开top_candidates, 以便返回
+            while (tmp_top_candidates.size() > 0)
+            {
+                std::pair<dist_t, tableint> rez = tmp_top_candidates.top();
+                // 展开超点
+                for (auto &&point: this->super_node_list_.at(rez.second)->contain_points_list)
+                {
+                    // dist_t d = distance(query_data, point);
+                    dist_t d = fstdistfunc_(query_data, getDataByInternalId(point), dist_func_param_);
+                    top_candidates.emplace(d, point);
+                }
+                tmp_top_candidates.pop();
             }
 
             while (top_candidates.size() > k)
