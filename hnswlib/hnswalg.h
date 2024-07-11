@@ -10,6 +10,7 @@
 #include <list>
 #include <memory>
 #include <vector>
+#include <limits>
 
 namespace hnswlib
 {
@@ -81,7 +82,7 @@ namespace hnswlib
         public:
             tableint id;
             std::vector<float> center_point;
-            std::unordered_set<tableint> contain_points_list;
+            std::vector<tableint> contain_points_list;
             dist_t radius;
             HierarchicalNSW<dist_t> *parent;
 
@@ -101,7 +102,7 @@ namespace hnswlib
             void add_point(tableint point_id)
             {
                 // 超点包含的普通顶点id需要被添加
-                contain_points_list.insert(point_id);
+                contain_points_list.emplace_back(point_id);
                 // 更新超点的中心点
                 update_center_point();
                 // 更新超点的半径
@@ -202,7 +203,8 @@ namespace hnswlib
             if (M <= 10000)
             {
                 M_ = M;
-            } else
+            }
+            else
             {
                 HNSWERR << "warning: M parameter exceeds 10000 which may lead to adverse effects." << std::endl;
                 HNSWERR << "         Cap to 10000 will be applied for the rest of the processing." << std::endl;
@@ -283,33 +285,40 @@ namespace hnswlib
         dist_t distance(tableint id1, tableint id2, const std::string &mode = "normal") const
         {
             // 求两个超边中任意两个顶点之间的最短距离
-            dist_t dist = INT64_MAX;
-            for (tableint point_id1: super_node_list_[id1]->contain_points_list)
-            {
-                for (tableint point_id2: super_node_list_[id2]->contain_points_list)
-                {
-                    dist_t dis = fstdistfunc_(getDataByInternalId(point_id1), getDataByInternalId(point_id2),
-                                              dist_func_param_);
-                    dist = std::min(dist, dis);
-                }
-            }
-            return dist;
-            // return this->super_node_list_.at(id1)->distance(this->super_node_list_.at(id2), mode);
+            // dist_t dist = INT64_MAX;
+            // for (tableint point_id1: super_node_list_[id1]->contain_points_list)
+            // {
+            //     for (tableint point_id2: super_node_list_[id2]->contain_points_list)
+            //     {
+            //         dist_t dis = fstdistfunc_(getDataByInternalId(point_id1), getDataByInternalId(point_id2),
+            //                                   dist_func_param_);
+            //         dist = std::min(dist, dis);
+            //     }
+            // }
+            // return dist;
+            return this->super_node_list_.at(id1)->distance(this->super_node_list_.at(id2), mode) -
+                   this->super_node_list_.at(id2)->radius - this->super_node_list_.at(id1)->radius;
             // return fstdistfunc_(getDataByInternalId(id1), getDataByInternalId(id2), dist_func_param_);
         }
 
         dist_t distance(const void *data, tableint id2, const std::string &mode = "normal") const
         {
-            dist_t dist = INT64_MAX;
-            for (const tableint & point_id2: super_node_list_.at(id2)->contain_points_list)
+            static_assert(std::numeric_limits<dist_t>::has_infinity);
+            dist_t dist = std::numeric_limits<dist_t>::infinity();
+// #pragma omp parallel for reduction(min:dist)
+//             for (auto it =  super_node_list_.at(id2)->contain_points_list.begin(); it !=  super_node_list_.at(id2)->contain_points_list.end(); ++it) {
+//                 dist_t dis = fstdistfunc_(data, getDataByInternalId(*it), dist_func_param_);
+//                 dist = std::min(dist, dis);
+//             }
+
+            for (const tableint &point_id2: super_node_list_.at(id2)->contain_points_list)
             {
-                dist_t dis = fstdistfunc_(data, getDataByInternalId(point_id2),
-                                          dist_func_param_);
+                dist_t dis = fstdistfunc_(data, getDataByInternalId(point_id2), dist_func_param_);
                 dist = std::min(dist, dis);
             }
-            return  dist;
+            return dist;
             // if (mode == "normal")
-            //     return fstdistfunc_(data, this->super_node_list_.at(id2)->center_point.data(), dist_func_param_);
+            //     return fstdistfunc_(data, this->super_node_list_.at(id2)->center_point.data(), dist_func_param_)- this->super_node_list_.at(id2)->radius;
             // else if (mode == "min")
             // {
             //     return fstdistfunc_(data, this->super_node_list_.at(id2)->center_point.data(), dist_func_param_) -
@@ -412,7 +421,8 @@ namespace hnswlib
                 top_candidates.emplace(dist, ep_id);
                 lowerBound = dist;
                 candidateSet.emplace(-dist, ep_id);
-            } else
+            }
+            else
             {
                 lowerBound = std::numeric_limits<dist_t>::max();
                 candidateSet.emplace(-lowerBound, ep_id);
@@ -436,7 +446,8 @@ namespace hnswlib
                 if (layer == 0)
                 {
                     data = (int *) get_linklist0(curNodeNum);
-                } else
+                }
+                else
                 {
                     data = (int *) get_linklist(curNodeNum, layer);
 //                    data = (int *) (linkLists_[curNodeNum] + (layer - 1) * size_links_per_element_);
@@ -519,7 +530,8 @@ namespace hnswlib
                     // stop_condition->add_point_to_result(getExternalLabel(ep_id), ep_data, dist);
                 }
                 candidate_set.emplace(-dist, ep_id);
-            } else
+            }
+            else
             {
                 lowerBound = std::numeric_limits<dist_t>::max();
                 candidate_set.emplace(-lowerBound, ep_id);
@@ -536,12 +548,14 @@ namespace hnswlib
                 if (bare_bone_search)
                 {
                     flag_stop_search = candidate_dist > lowerBound;
-                } else
+                }
+                else
                 {
                     if (stop_condition)
                     {
                         flag_stop_search = stop_condition->should_stop_search(candidate_dist, lowerBound);
-                    } else
+                    }
+                    else
                     {
                         flag_stop_search = candidate_dist > lowerBound && top_candidates.size() == ef;
                     }
@@ -591,7 +605,8 @@ namespace hnswlib
                         if (!bare_bone_search && stop_condition)
                         {
                             flag_consider_candidate = stop_condition->should_consider_candidate(dist, lowerBound);
-                        } else
+                        }
+                        else
                         {
                             flag_consider_candidate = top_candidates.size() < ef || lowerBound > dist;
                         }
@@ -621,7 +636,8 @@ namespace hnswlib
                             if (!bare_bone_search && stop_condition)
                             {
                                 flag_remove_extra = stop_condition->should_remove_extra();
-                            } else
+                            }
+                            else
                             {
                                 flag_remove_extra = top_candidates.size() > ef;
                             }
@@ -634,7 +650,8 @@ namespace hnswlib
                                     stop_condition->remove_point_from_result(getExternalLabel(id),
                                                                              getDataByInternalId(id), dist);
                                     flag_remove_extra = stop_condition->should_remove_extra();
-                                } else
+                                }
+                                else
                                 {
                                     flag_remove_extra = top_candidates.size() > ef;
                                 }
@@ -822,7 +839,8 @@ namespace hnswlib
                     {
                         data[sz_link_list_other] = cur_c;
                         setListCount(ll_other, sz_link_list_other + 1);
-                    } else
+                    }
+                    else
                     {
                         // finding the "weakest" element to replace it with the new one
                         // dist_t d_max = fstdistfunc_(getDataByInternalId(cur_c),
@@ -1055,7 +1073,8 @@ namespace hnswlib
                 {
                     element_levels_[i] = 0;
                     linkLists_[i] = nullptr;
-                } else
+                }
+                else
                 {
                     element_levels_[i] = linkListSize / size_links_per_element_;
                     linkLists_[i] = (char *) malloc(linkListSize);
@@ -1146,7 +1165,8 @@ namespace hnswlib
                     std::unique_lock<std::mutex> lock_deleted_elements(deleted_elements_lock);
                     deleted_elements.insert(internalId);
                 }
-            } else
+            }
+            else
             {
                 throw std::runtime_error("The requested to delete element is already deleted");
             }
@@ -1193,7 +1213,8 @@ namespace hnswlib
                     std::unique_lock<std::mutex> lock_deleted_elements(deleted_elements_lock);
                     deleted_elements.erase(internalId);
                 }
-            } else
+            }
+            else
             {
                 throw std::runtime_error("The requested to undelete element is not deleted");
             }
@@ -1276,7 +1297,8 @@ namespace hnswlib
             if (!is_vacant_place)
             {
                 addPoint(data_point, label, -1);
-            } else
+            }
+            else
             {
                 // we assume that there are no concurrent operations on deleted element
                 labeltype label_replaced = getExternalLabel(internal_id_replaced);
@@ -1351,7 +1373,8 @@ namespace hnswlib
                         if (candidates.size() < elementsToKeep)
                         {
                             candidates.emplace(distance, cand);
-                        } else
+                        }
+                        else
                         {
                             if (distance < candidates.top().first)
                             {
@@ -1612,7 +1635,8 @@ namespace hnswlib
                     }
                     currObj = mutuallyConnectNewElement(data_point, cur_superNode, top_candidates, level, false);
                 }
-            } else
+            }
+            else
             {
                 // Do nothing for the first element
                 enterpoint_node_ = 0;
@@ -1676,24 +1700,56 @@ namespace hnswlib
             {
                 tmp_top_candidates = searchBaseLayerST<true>(
                         currObj, query_data, std::max(ef_construction_, k), isIdAllowed);
-            } else
+            }
+            else
             {
                 tmp_top_candidates = searchBaseLayerST<false>(
                         currObj, query_data, std::max(ef_construction_, k), isIdAllowed);
             }
-            std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates;
-            // 展开top_candidates, 以便返回
-            while (tmp_top_candidates.size() > 0)
+            std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> min_top_candidates;
+            while (!tmp_top_candidates.empty())
             {
                 std::pair<dist_t, tableint> rez = tmp_top_candidates.top();
+                rez.first = -rez.first;
+                min_top_candidates.emplace(rez);
+                tmp_top_candidates.pop();
+            }
+
+            std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates;
+            // 展开top_candidates, 以便返回
+            while (min_top_candidates.size() > 0)
+            {
+                std::pair<dist_t, tableint> rez = min_top_candidates.top();
+                min_top_candidates.pop();
+                // 检查超点是否可以被插入，如果已经比已有的大了，则不需要
+                if (top_candidates.size() >= k)
+                {
+                    // 超点最小距离大于top_candidates中最大距离
+                    if (-rez.first > top_candidates.top().first)
+                        continue;
+                }
                 // 展开超点
                 for (auto &&point: this->super_node_list_.at(rez.second)->contain_points_list)
                 {
                     // dist_t d = distance(query_data, point);
                     dist_t d = fstdistfunc_(query_data, getDataByInternalId(point), dist_func_param_);
-                    top_candidates.emplace(d, point);
+                    if (top_candidates.size() >= k)
+                    {
+                        if (d > top_candidates.top().first)
+                            continue;
+                        else
+                            top_candidates.emplace(d, point);
+                    }
+                    else
+                    {
+                        top_candidates.emplace(d, point);
+                    }
+                    while (top_candidates.size() > k)
+                    {
+                        top_candidates.pop();
+
+                    }
                 }
-                tmp_top_candidates.pop();
             }
 
             while (top_candidates.size() > k)

@@ -7,7 +7,7 @@
 int main()
 {
     int M = 32;                 // Tightly connected with internal dimensionality of the data
-    int ef_construction = 200;  // Controls index search speed/build speed tradeoff
+    int ef_construction = 50;  // Controls index search speed/build speed tradeoff
     float disThreshold = 1600000;
     size_t maxNum = 100;
 
@@ -16,6 +16,9 @@ int main()
                                           dims_out);
     int dim = int(dims_out[1]);
     int max_elements = int(dims_out[0]);
+
+    std::cout<<"dim="<<dim<<" max_elements="<<max_elements<<" M="<<M<<" ef_construction="<<ef_construction<<std::endl;
+    std::cout<<"disThreshold="<<disThreshold<<" maxNum="<<maxNum<<std::endl;
 
     // Initing index
     hnswlib::L2Space space(dim);
@@ -28,8 +31,7 @@ int main()
         Time time("Build Index");
         for (int i = 0; i < max_elements; i++)
         {
-            std::cout<<"\raddPoint "<<i<<"/"<<max_elements;
-            std::cout.flush();
+            schedule("AddPoint",i,max_elements);
             std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(data.get() + i * dim, 1);
             if (result.empty() or
                 !alg_hnsw->addPointToSuperNode(data.get() + i * dim, alg_hnsw->node_to_super_node_.at(result.top().second)))
@@ -54,8 +56,7 @@ int main()
         Time time("KNN Search");
         for (int i = 0; i < test_max_elements; i++)
         {
-            std::cout<<"\rann "<<i<<"/"<<max_elements;
-            std::cout.flush();
+            schedule("ANN",i,max_elements);
             int k = 10;
             std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(
                     test_data.get() + i * dim, k);

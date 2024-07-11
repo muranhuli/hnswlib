@@ -8,6 +8,8 @@
 #include <chrono>
 #include <string>
 #include <iostream>
+#include <memory>
+#include <H5Cpp.h>
 
 class Time
 {
@@ -98,5 +100,13 @@ public:
         return data;
     }
 };
+
+void schedule(const std::string &content, int i, int max_elements)
+{
+    if (i == max_elements - 1)
+        std::cout << "\r"<<content<<" " << i << "/" << max_elements <<std::endl;
+    else
+        std::cout << "\r"<<content<<" " << i << "/" << max_elements << std::flush;
+}
 
 #endif //HNSWLIB_UTILS_H
