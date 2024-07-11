@@ -1703,7 +1703,7 @@ namespace hnswlib
             while (top_candidates.size() > 0)
             {
                 std::pair<dist_t, tableint> rez = top_candidates.top();
-                result.push(std::pair<dist_t, labeltype>(rez.first, getExternalLabel(rez.second)));
+                result.push(std::pair<dist_t, labeltype>(rez.first, rez.second));
                 top_candidates.pop();
             }
             return result;
