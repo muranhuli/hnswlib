@@ -7,8 +7,8 @@
 int main()
 {
     int M = 32;                 // Tightly connected with internal dimensionality of the data
-    int ef_construction = 50;  // Controls index search speed/build speed tradeoff
-    float disThreshold = 1600000;
+    int ef_construction = 200;  // Controls index search speed/build speed tradeoff
+    float disThreshold = 1200000;
     size_t maxNum = 100;
 
     hsize_t dims_out[2];
@@ -24,7 +24,7 @@ int main()
     hnswlib::L2Space space(dim);
     auto *alg_hnsw = new hnswlib::HierarchicalNSW<float>(&space, max_elements, disThreshold,
                                                          maxNum, M,
-                                                         ef_construction);
+                                                         ef_construction, 100,true);
 
     // Add data to index
     {
@@ -36,7 +36,8 @@ int main()
             if (result.empty() or
                 !alg_hnsw->addPointToSuperNode(data.get() + i * dim, alg_hnsw->node_to_super_node_.at(result.top().second)))
             {
-                alg_hnsw->addPoint(data.get() + i * dim, i);
+                hnswlib::labeltype label = alg_hnsw->cur_super_node_count;
+                alg_hnsw->addPoint(data.get() + i * dim, label);
             }
         }
     }

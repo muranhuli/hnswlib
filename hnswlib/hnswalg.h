@@ -113,19 +113,38 @@ namespace hnswlib
             // 更新超点中心点
             void update_center_point()
             {
-                center_point.assign(center_point.size(), 0.0f);
-                for (tableint point_id: contain_points_list)
+                dist_t dis = std::numeric_limits<dist_t>::infinity();
+                for (tableint &point_id_1: contain_points_list)
                 {
-                    auto point_data = (float *) parent->getDataByInternalId(point_id);
-                    for (size_t i = 0; i < *((size_t *) this->parent->dist_func_param_); i++)
+                    dist_t tmp_dis = 0;
+                    for (tableint &point_id_2: contain_points_list)
                     {
-                        center_point[i] += point_data[i];
+                        if (point_id_1 != point_id_2)
+                        {
+                            tmp_dis += parent->fstdistfunc_(parent->getDataByInternalId(point_id_1),
+                                                            parent->getDataByInternalId(point_id_2),
+                                                            parent->dist_func_param_);
+                        }
+                    }
+                    if (tmp_dis < dis)
+                    {
+                        dis = tmp_dis;
+                        memcpy(center_point.data(), parent->getDataByInternalId(point_id_1), parent->data_size_);
                     }
                 }
-                for (float &i: center_point)
-                {
-                    i /= contain_points_list.size();
-                }
+                // center_point.assign(center_point.size(), 0.0f);
+                // for (tableint point_id: contain_points_list)
+                // {
+                //     auto point_data = (float *) parent->getDataByInternalId(point_id);
+                //     for (size_t i = 0; i < *((size_t *) this->parent->dist_func_param_); i++)
+                //     {
+                //         center_point[i] += point_data[i];
+                //     }
+                // }
+                // for (float &i: center_point)
+                // {
+                //     i /= contain_points_list.size();
+                // }
             }
 
             // 更新超点半径
@@ -1259,6 +1278,9 @@ namespace hnswlib
             this->node_to_super_node_[cur_c] = superNode;
             SuperNode *superNode_ptr = this->super_node_list_.at(superNode);
             superNode_ptr->add_point(cur_c);
+            // 更新超点
+            // this->addPoint(this->super_node_list_.at(superNode)->center_point.data(), superNode);
+
             return true;
         }
 
@@ -1275,6 +1297,7 @@ namespace hnswlib
             }
 
             // lock all operations with element by label
+            // 只插入新的顶点，不进行替换操作
             std::unique_lock<std::mutex> lock_label(getLabelOpMutex(label));
             if (!replace_deleted)
             {
@@ -1318,7 +1341,7 @@ namespace hnswlib
         void updatePoint(const void *dataPoint, tableint internalId, float updateNeighborProbability)
         {
             // update the feature vector associated with existing point with new vector
-            memcpy(getDataByInternalId(internalId), dataPoint, data_size_);
+            // memcpy(getDataByInternalId(internalId), dataPoint, data_size_);
 
             int maxLevelCopy = maxlevel_;
             tableint entryPointCopy = enterpoint_node_;
@@ -1332,8 +1355,9 @@ namespace hnswlib
             {
                 std::unordered_set<tableint> sCand;
                 std::unordered_set<tableint> sNeigh;
+                // 获得internalId的一阶邻居
                 std::vector<tableint> listOneHop = getConnectionsWithLock(internalId, layer);
-                if (listOneHop.size() == 0)
+                if (listOneHop.empty())
                     continue;
 
                 sCand.insert(internalId);
@@ -1368,18 +1392,19 @@ namespace hnswlib
                         if (cand == neigh)
                             continue;
 
-                        dist_t distance = fstdistfunc_(getDataByInternalId(neigh), getDataByInternalId(cand),
-                                                       dist_func_param_);
+                        // dist_t distance = fstdistfunc_(getDataByInternalId(neigh), getDataByInternalId(cand),
+                        //                                dist_func_param_);
+                        dist_t dis = distance(neigh, cand);
                         if (candidates.size() < elementsToKeep)
                         {
-                            candidates.emplace(distance, cand);
+                            candidates.emplace(dis, cand);
                         }
                         else
                         {
-                            if (distance < candidates.top().first)
+                            if (dis < candidates.top().first)
                             {
                                 candidates.pop();
-                                candidates.emplace(distance, cand);
+                                candidates.emplace(dis, cand);
                             }
                         }
                     }
@@ -1393,7 +1418,7 @@ namespace hnswlib
                         ll_cur = get_linklist_at_level(neigh, layer);
                         size_t candSize = candidates.size();
                         setListCount(ll_cur, candSize);
-                        tableint *data = (tableint *) (ll_cur + 1);
+                        auto *data = (tableint *) (ll_cur + 1);
                         for (size_t idx = 0; idx < candSize; idx++)
                         {
                             data[idx] = candidates.top().second;
@@ -1417,7 +1442,8 @@ namespace hnswlib
             tableint currObj = entryPointInternalId;
             if (dataPointLevel < maxLevel)
             {
-                dist_t curdist = fstdistfunc_(dataPoint, getDataByInternalId(currObj), dist_func_param_);
+                // dist_t curdist = fstdistfunc_(dataPoint, getDataByInternalId(currObj), dist_func_param_);
+                dist_t curdist = distance(dataPoint, currObj);
                 for (int level = maxLevel; level > dataPointLevel; level--)
                 {
                     bool changed = true;
