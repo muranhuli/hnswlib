@@ -11,6 +11,7 @@
 #include <memory>
 #include <vector>
 #include <limits>
+#include <set>
 
 namespace hnswlib
 {
@@ -304,20 +305,17 @@ namespace hnswlib
         dist_t distance(tableint id1, tableint id2, const std::string &mode = "normal") const
         {
             // 求两个超边中任意两个顶点之间的最短距离
-            // dist_t dist = INT64_MAX;
-            // for (tableint point_id1: super_node_list_[id1]->contain_points_list)
-            // {
-            //     for (tableint point_id2: super_node_list_[id2]->contain_points_list)
-            //     {
-            //         dist_t dis = fstdistfunc_(getDataByInternalId(point_id1), getDataByInternalId(point_id2),
-            //                                   dist_func_param_);
-            //         dist = std::min(dist, dis);
-            //     }
-            // }
-            // return dist;
-            return this->super_node_list_.at(id1)->distance(this->super_node_list_.at(id2), mode) -
-                   this->super_node_list_.at(id2)->radius - this->super_node_list_.at(id1)->radius;
-            // return fstdistfunc_(getDataByInternalId(id1), getDataByInternalId(id2), dist_func_param_);
+            dist_t dist = INT64_MAX;
+            for (tableint point_id1: super_node_list_[id1]->contain_points_list)
+            {
+                for (tableint point_id2: super_node_list_[id2]->contain_points_list)
+                {
+                    dist_t dis = fstdistfunc_(getDataByInternalId(point_id1), getDataByInternalId(point_id2),
+                                              dist_func_param_);
+                    dist = std::min(dist, dis);
+                }
+            }
+            return dist;
         }
 
         dist_t distance(const void *data, tableint id2, const std::string &mode = "normal") const
@@ -539,7 +537,7 @@ namespace hnswlib
             if (bare_bone_search ||
                 (!isMarkedDeleted(ep_id) && ((!isIdAllowed) || (*isIdAllowed)(getExternalLabel(ep_id)))))
             {
-                char *ep_data = getDataByInternalId(ep_id);
+                // char *ep_data = getDataByInternalId(ep_id);
                 // dist_t dist = fstdistfunc_(data_point, ep_data, dist_func_param_);
                 dist_t dist = distance(data_point, ep_id, "min");
                 lowerBound = dist;
@@ -1261,27 +1259,40 @@ namespace hnswlib
             *((unsigned short int *) (ptr)) = *((unsigned short int *) &size);
         }
 
-        bool addPointToSuperNode(const void *data_point, tableint superNode)
+        bool addPointToSuperNode(const void *data_point, std::set<int> &result)
         {
+            std::set<int> candidate_set;
+            for (auto &node: result)
+            {
+                candidate_set.insert(this->node_to_super_node_.at(node));
+            }
             // 一个顶点被插入超边，需要保证这个顶点与超点中心距离不超过超点半径，即这是一个球形超点
             // 检查插入点与超点中心之间的距离是否满足阈值
-            if (this->super_node_list_.at(superNode)->contain_points_list.size() >= max_nodes_in_supernode)
-                return false;
-            dist_t dist = fstdistfunc_(data_point, this->super_node_list_[superNode]->center_point.data(),
-                                       dist_func_param_);
-            if (dist > disThreshold)
-                return false;
-            // 将顶点添加至超点内
-            tableint cur_c = cur_element_count;
-            cur_element_count++;
-            memcpy(getDataByInternalId(cur_c), data_point, data_size_);
-            this->node_to_super_node_[cur_c] = superNode;
-            SuperNode *superNode_ptr = this->super_node_list_.at(superNode);
-            superNode_ptr->add_point(cur_c);
-            // 更新超点
-            // this->addPoint(this->super_node_list_.at(superNode)->center_point.data(), superNode);
-
-            return true;
+            bool flag = false;
+            tableint cur_c;
+            for (auto &superNode: candidate_set)
+            {
+                if (this->super_node_list_.at(superNode)->contain_points_list.size() >= max_nodes_in_supernode)
+                    continue;
+                dist_t dist = fstdistfunc_(data_point, this->super_node_list_[superNode]->center_point.data(),
+                                           dist_func_param_);
+                if (dist > disThreshold)
+                    continue;
+                // 将顶点添加至超点内
+                if (!flag)
+                {
+                    cur_c = cur_element_count;
+                    cur_element_count++;
+                    memcpy(getDataByInternalId(cur_c), data_point, data_size_);
+                    this->node_to_super_node_[cur_c] = superNode;
+                }
+                SuperNode *superNode_ptr = this->super_node_list_.at(superNode);
+                superNode_ptr->add_point(cur_c);
+                // 更新超点
+                // this->addPoint(this->super_node_list_.at(superNode)->center_point.data(), superNode);
+                flag = true;
+            }
+            return flag;
         }
 
 
@@ -1454,7 +1465,7 @@ namespace hnswlib
                         std::unique_lock<std::mutex> lock(link_list_locks_[currObj]);
                         data = get_linklist_at_level(currObj, level);
                         int size = getListCount(data);
-                        tableint *datal = (tableint *) (data + 1);
+                        auto *datal = (tableint *) (data + 1);
 #ifdef USE_SSE
                         _mm_prefetch(getDataByInternalId(*datal), _MM_HINT_T0);
 #endif
@@ -1464,7 +1475,8 @@ namespace hnswlib
                             _mm_prefetch(getDataByInternalId(*(datal + i + 1)), _MM_HINT_T0);
 #endif
                             tableint cand = datal[i];
-                            dist_t d = fstdistfunc_(dataPoint, getDataByInternalId(cand), dist_func_param_);
+                            // dist_t d = fstdistfunc_(dataPoint, getDataByInternalId(cand), dist_func_param_);
+                            dist_t d = distance(dataPoint, cand);
                             if (d < curdist)
                             {
                                 curdist = d;
@@ -1500,9 +1512,12 @@ namespace hnswlib
                     bool epDeleted = isMarkedDeleted(entryPointInternalId);
                     if (epDeleted)
                     {
+                        // filteredTopCandidates.emplace(
+                        //         fstdistfunc_(dataPoint, getDataByInternalId(entryPointInternalId), dist_func_param_),
+                        //         entryPointInternalId);
                         filteredTopCandidates.emplace(
-                                fstdistfunc_(dataPoint, getDataByInternalId(entryPointInternalId), dist_func_param_),
-                                entryPointInternalId);
+                                distance(dataPoint, entryPointInternalId), entryPointInternalId
+                        );
                         if (filteredTopCandidates.size() > ef_construction_)
                             filteredTopCandidates.pop();
                     }
@@ -1702,7 +1717,7 @@ namespace hnswlib
                     metric_hops++;
                     metric_distance_computations += size;
 
-                    tableint *datal = (tableint *) (data + 1);
+                    auto *datal = (tableint *) (data + 1);
                     for (int i = 0; i < size; i++)
                     {
                         tableint cand = datal[i];

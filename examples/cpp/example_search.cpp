@@ -6,10 +6,10 @@
 
 int main()
 {
-    int M = 32;                 // Tightly connected with internal dimensionality of the data
+    int M = 64;                 // Tightly connected with internal dimensionality of the data
     int ef_construction = 200;  // Controls index search speed/build speed tradeoff
-    float disThreshold = 1200000;
-    size_t maxNum = 100;
+    float disThreshold = 2400000;
+    size_t maxNum = 200;
 
     hsize_t dims_out[2];
     auto data = DataRead::read_hdf5_float("/media/disk7T/liuyu/hdf5/fashion-mnist-784-euclidean.hdf5", "/train",
@@ -33,8 +33,15 @@ int main()
         {
             schedule("AddPoint",i,max_elements);
             std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(data.get() + i * dim, 1);
-            if (result.empty() or
-                !alg_hnsw->addPointToSuperNode(data.get() + i * dim, alg_hnsw->node_to_super_node_.at(result.top().second)))
+            std::set<int> result_label;
+            while (!result.empty())
+            {
+                result_label.insert(int(result.top().second));
+                result.pop();
+            }
+
+            if (result_label.empty() or
+                !alg_hnsw->addPointToSuperNode(data.get() + i * dim, result_label))
             {
                 hnswlib::labeltype label = alg_hnsw->cur_super_node_count;
                 alg_hnsw->addPoint(data.get() + i * dim, label);
@@ -57,7 +64,7 @@ int main()
         Time time("KNN Search");
         for (int i = 0; i < test_max_elements; i++)
         {
-            schedule("ANN",i,max_elements);
+            schedule("ANN",i,test_max_elements);
             int k = 10;
             std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(
                     test_data.get() + i * dim, k);
