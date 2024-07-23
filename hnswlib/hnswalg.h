@@ -12,6 +12,16 @@
 #include <vector>
 #include <limits>
 #include <set>
+#include <thread>
+#include <iostream>
+#include <vector>
+#include <algorithm>
+#include <cmath>
+#include <limits>
+#include <thread>
+#include <functional>
+#include <future>
+#include <mutex>
 
 namespace hnswlib
 {
@@ -304,44 +314,91 @@ namespace hnswlib
 
         dist_t distance(tableint id1, tableint id2, const std::string &mode = "normal") const
         {
-            // 求两个超边中任意两个顶点之间的最短距离
-            dist_t dist = INT64_MAX;
-            for (tableint point_id1: super_node_list_[id1]->contain_points_list)
-            {
-                for (tableint point_id2: super_node_list_[id2]->contain_points_list)
-                {
-                    dist_t dis = fstdistfunc_(getDataByInternalId(point_id1), getDataByInternalId(point_id2),
-                                              dist_func_param_);
-                    dist = std::min(dist, dis);
+            dist_t dist = std::numeric_limits<dist_t>::infinity();
+            auto& points1 = super_node_list_[id1]->contain_points_list;
+            auto& points2 = super_node_list_[id2]->contain_points_list;
+
+            size_t num_points1 = points1.size();
+            size_t num_points2 = points2.size();
+
+            std::vector<dist_t> results(std::thread::hardware_concurrency(), std::numeric_limits<dist_t>::infinity());
+            // std::mutex results_mutex;
+
+            auto process_block = [&](size_t start1, size_t end1, size_t start2, size_t end2, size_t index) {
+                dist_t local_dist = std::numeric_limits<dist_t>::infinity();
+                for (size_t i = start1; i < end1; ++i) {
+                    for (size_t j = start2; j < end2; ++j) {
+                        dist_t dis = fstdistfunc_(getDataByInternalId(points1[i]), getDataByInternalId(points2[j]),
+                                                  dist_func_param_);
+                        local_dist = std::min(local_dist, dis);
+                    }
+                }
+                // std::lock_guard<std::mutex> lock(results_mutex);
+                results[index] = local_dist;
+            };
+
+            size_t block_size1 = num_points1 / 5 + 1;
+            size_t block_size2 = num_points2 / 5 + 1;
+
+            std::vector<std::future<void>> futures;
+            for (size_t i = 0; i < num_points1; i += block_size1) {
+                size_t start1 = i;
+                size_t end1 = std::min(i + block_size1, num_points1);
+                for (size_t j = 0; j < num_points2; j += block_size2) {
+                    size_t start2 = j;
+                    size_t end2 = std::min(j + block_size2, num_points2);
+                    futures.push_back(std::async(std::launch::async, process_block, start1, end1, start2, end2, futures.size()));
                 }
             }
+
+            for (auto& future : futures) {
+                future.get();
+            }
+
+            dist = *std::min_element(results.begin(), results.end());
             return dist;
         }
 
         dist_t distance(const void *data, tableint id2, const std::string &mode = "normal") const
         {
-            static_assert(std::numeric_limits<dist_t>::has_infinity);
+            static_assert(std::numeric_limits<dist_t>::has_infinity, "dist_t must have infinity");
+
             dist_t dist = std::numeric_limits<dist_t>::infinity();
-// #pragma omp parallel for reduction(min:dist)
-//             for (auto it =  super_node_list_.at(id2)->contain_points_list.begin(); it !=  super_node_list_.at(id2)->contain_points_list.end(); ++it) {
-//                 dist_t dis = fstdistfunc_(data, getDataByInternalId(*it), dist_func_param_);
-//                 dist = std::min(dist, dis);
-//             }
+            auto points = super_node_list_.at(id2)->contain_points_list;
+            size_t num_points = points.size();
 
-            for (const tableint &point_id2: super_node_list_.at(id2)->contain_points_list)
-            {
-                dist_t dis = fstdistfunc_(data, getDataByInternalId(point_id2), dist_func_param_);
-                dist = std::min(dist, dis);
+            // 分块大小
+            size_t block_size = num_points / 5 + 1;
+
+            // 存储每个块的结果
+            std::vector<dist_t> results(block_size, std::numeric_limits<dist_t>::infinity());
+            // std::mutex results_mutex;
+
+            auto process_block = [&](size_t start, size_t end, size_t index) {
+                dist_t local_dist = std::numeric_limits<dist_t>::infinity();
+                for (size_t i = start; i < end; ++i) {
+                    tableint point_id2 = points[i];
+                    dist_t dis = fstdistfunc_(data, getDataByInternalId(point_id2), dist_func_param_);
+                    local_dist = std::min(local_dist, dis);
+                }
+                // std::lock_guard<std::mutex> lock(results_mutex);
+                results[index] = local_dist;
+            };
+
+            std::vector<std::future<void>> futures;
+            for (size_t i = 0; i < num_points; i += block_size) {
+                size_t start = i;
+                size_t end = std::min(i + block_size, num_points);
+                size_t index = i / block_size;
+                futures.push_back(std::async(std::launch::async, process_block, start, end, index));
             }
-            return dist;
-            // if (mode == "normal")
-            //     return fstdistfunc_(data, this->super_node_list_.at(id2)->center_point.data(), dist_func_param_)- this->super_node_list_.at(id2)->radius;
-            // else if (mode == "min")
-            // {
-            //     return fstdistfunc_(data, this->super_node_list_.at(id2)->center_point.data(), dist_func_param_) -
-            //            this->super_node_list_.at(id2)->radius;
-            // }
 
+            for (auto& future : futures) {
+                future.get();
+            }
+
+            dist = *std::min_element(results.begin(), results.end());
+            return dist;
         }
 
         struct CompareByFirst
