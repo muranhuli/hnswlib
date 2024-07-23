@@ -4,8 +4,8 @@
 #include "hnswlib.h"
 #include <atomic>
 #include <random>
-#include <stdlib.h>
-#include <assert.h>
+#include <cstdlib>
+#include <cassert>
 #include <unordered_set>
 #include <list>
 #include <memory>
@@ -114,38 +114,38 @@ namespace hnswlib
             // 更新超点中心点
             void update_center_point()
             {
-                dist_t dis = std::numeric_limits<dist_t>::infinity();
-                for (tableint &point_id_1: contain_points_list)
-                {
-                    dist_t tmp_dis = 0;
-                    for (tableint &point_id_2: contain_points_list)
-                    {
-                        if (point_id_1 != point_id_2)
-                        {
-                            tmp_dis += parent->fstdistfunc_(parent->getDataByInternalId(point_id_1),
-                                                            parent->getDataByInternalId(point_id_2),
-                                                            parent->dist_func_param_);
-                        }
-                    }
-                    if (tmp_dis < dis)
-                    {
-                        dis = tmp_dis;
-                        memcpy(center_point.data(), parent->getDataByInternalId(point_id_1), parent->data_size_);
-                    }
-                }
-                // center_point.assign(center_point.size(), 0.0f);
-                // for (tableint point_id: contain_points_list)
+                // dist_t dis = std::numeric_limits<dist_t>::infinity();
+                // for (tableint &point_id_1: contain_points_list)
                 // {
-                //     auto point_data = (float *) parent->getDataByInternalId(point_id);
-                //     for (size_t i = 0; i < *((size_t *) this->parent->dist_func_param_); i++)
+                //     dist_t tmp_dis = 0;
+                //     for (tableint &point_id_2: contain_points_list)
                 //     {
-                //         center_point[i] += point_data[i];
+                //         if (point_id_1 != point_id_2)
+                //         {
+                //             tmp_dis += parent->fstdistfunc_(parent->getDataByInternalId(point_id_1),
+                //                                             parent->getDataByInternalId(point_id_2),
+                //                                             parent->dist_func_param_);
+                //         }
+                //     }
+                //     if (tmp_dis < dis)
+                //     {
+                //         dis = tmp_dis;
+                //         memcpy(center_point.data(), parent->getDataByInternalId(point_id_1), parent->data_size_);
                 //     }
                 // }
-                // for (float &i: center_point)
-                // {
-                //     i /= contain_points_list.size();
-                // }
+                center_point.assign(center_point.size(), 0.0f);
+                for (tableint point_id: contain_points_list)
+                {
+                    auto point_data = (float *) parent->getDataByInternalId(point_id);
+                    for (size_t i = 0; i < *((size_t *) this->parent->dist_func_param_); i++)
+                    {
+                        center_point[i] += point_data[i];
+                    }
+                }
+                for (float &i: center_point)
+                {
+                    i /= contain_points_list.size();
+                }
             }
 
             // 更新超点半径
@@ -322,26 +322,12 @@ namespace hnswlib
         {
             static_assert(std::numeric_limits<dist_t>::has_infinity);
             dist_t dist = std::numeric_limits<dist_t>::infinity();
-// #pragma omp parallel for reduction(min:dist)
-//             for (auto it =  super_node_list_.at(id2)->contain_points_list.begin(); it !=  super_node_list_.at(id2)->contain_points_list.end(); ++it) {
-//                 dist_t dis = fstdistfunc_(data, getDataByInternalId(*it), dist_func_param_);
-//                 dist = std::min(dist, dis);
-//             }
-
             for (const tableint &point_id2: super_node_list_.at(id2)->contain_points_list)
             {
                 dist_t dis = fstdistfunc_(data, getDataByInternalId(point_id2), dist_func_param_);
                 dist = std::min(dist, dis);
             }
             return dist;
-            // if (mode == "normal")
-            //     return fstdistfunc_(data, this->super_node_list_.at(id2)->center_point.data(), dist_func_param_)- this->super_node_list_.at(id2)->radius;
-            // else if (mode == "min")
-            // {
-            //     return fstdistfunc_(data, this->super_node_list_.at(id2)->center_point.data(), dist_func_param_) -
-            //            this->super_node_list_.at(id2)->radius;
-            // }
-
         }
 
         struct CompareByFirst
@@ -617,7 +603,11 @@ namespace hnswlib
 
                         // char *currObj1 = (getDataByInternalId(candidate_id));
                         // dist_t dist = fstdistfunc_(data_point, currObj1, dist_func_param_);
-                        dist_t dist = distance(data_point, candidate_id, "min");
+                        // dist_t dist = distance(data_point, candidate_id, "min");
+                        dist_t dist =
+                                fstdistfunc_(data_point, this->super_node_list_.at(candidate_id)->center_point.data(),
+                                             dist_func_param_) -
+                                this->super_node_list_.at(candidate_id)->radius;
                         bool flag_consider_candidate;
                         if (!bare_bone_search && stop_condition)
                         {
@@ -625,6 +615,10 @@ namespace hnswlib
                         }
                         else
                         {
+                            if (top_candidates.size() < ef)
+                                dist = distance(data_point, candidate_id);
+                            else if (dist < lowerBound)
+                                dist = distance(data_point, candidate_id);
                             flag_consider_candidate = top_candidates.size() < ef || lowerBound > dist;
                         }
 
@@ -1270,29 +1264,35 @@ namespace hnswlib
             // 检查插入点与超点中心之间的距离是否满足阈值
             bool flag = false;
             tableint cur_c;
+            dist_t min_dist = std::numeric_limits<dist_t>::max();
+            tableint index = -1;
             for (auto &superNode: candidate_set)
             {
                 if (this->super_node_list_.at(superNode)->contain_points_list.size() >= max_nodes_in_supernode)
                     continue;
                 dist_t dist = fstdistfunc_(data_point, this->super_node_list_[superNode]->center_point.data(),
                                            dist_func_param_);
-                if (dist > disThreshold)
-                    continue;
-                // 将顶点添加至超点内
-                if (!flag)
+                if (dist < min_dist)
                 {
-                    cur_c = cur_element_count;
-                    cur_element_count++;
-                    memcpy(getDataByInternalId(cur_c), data_point, data_size_);
-                    this->node_to_super_node_[cur_c] = superNode;
+                    min_dist = dist;
+                    index = superNode;
                 }
-                SuperNode *superNode_ptr = this->super_node_list_.at(superNode);
+            }
+            if (min_dist > this->disThreshold)
+                return false;
+            if (index != -1)
+            {
+                cur_c = cur_element_count;
+                cur_element_count++;
+                memcpy(getDataByInternalId(cur_c), data_point, data_size_);
+                this->node_to_super_node_[cur_c] = index;
+
+                SuperNode *superNode_ptr = this->super_node_list_.at(index);
                 superNode_ptr->add_point(cur_c);
                 // 更新超点
                 // this->addPoint(this->super_node_list_.at(superNode)->center_point.data(), superNode);
-                flag = true;
             }
-            return flag;
+            return true;
         }
 
 
@@ -1724,7 +1724,12 @@ namespace hnswlib
                         if (cand < 0 || cand > max_elements_)
                             throw std::runtime_error("cand error");
                         // dist_t d = fstdistfunc_(query_data, getDataByInternalId(cand), dist_func_param_);
-                        dist_t d = distance(query_data, cand, "min");
+                        dist_t d = fstdistfunc_(query_data, this->super_node_list_.at(cand)->center_point.data(),
+                                                dist_func_param_) -
+                                   this->super_node_list_.at(cand)->radius;
+                        if (d > curdist)
+                            continue;
+                        d = distance(query_data, cand, "min");
                         if (d < curdist)
                         {
                             curdist = d;

@@ -8,8 +8,8 @@ int main()
 {
     int M = 64;                 // Tightly connected with internal dimensionality of the data
     int ef_construction = 200;  // Controls index search speed/build speed tradeoff
-    float disThreshold = 2400000;
-    size_t maxNum = 200;
+    float disThreshold = 2000000;
+    size_t maxNum = 50;
 
     hsize_t dims_out[2];
     auto data = DataRead::read_hdf5_float("/media/disk7T/liuyu/hdf5/fashion-mnist-784-euclidean.hdf5", "/train",
@@ -32,7 +32,7 @@ int main()
         for (int i = 0; i < max_elements; i++)
         {
             schedule("AddPoint",i,max_elements);
-            std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(data.get() + i * dim, 1);
+            std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(data.get() + i * dim, 20);
             std::set<int> result_label;
             while (!result.empty())
             {
@@ -59,6 +59,8 @@ int main()
     int neighbor_dim = int(dims_out[1]);
 
     // Query the elements for themselves and measure recall
+    // alg_hnsw->ef_construction_ = 50;
+    // alg_hnsw->ef_ = 50;
     float correct = 0;
     {
         Time time("KNN Search");
