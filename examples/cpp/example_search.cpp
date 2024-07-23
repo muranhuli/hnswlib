@@ -59,8 +59,8 @@ int main()
     int neighbor_dim = int(dims_out[1]);
 
     // Query the elements for themselves and measure recall
-    // alg_hnsw->ef_construction_ = 50;
-    // alg_hnsw->ef_ = 50;
+    alg_hnsw->ef_construction_ = 400;
+    alg_hnsw->ef_ = 400;
     float correct = 0;
     {
         Time time("KNN Search");
@@ -93,7 +93,7 @@ int main()
     float recall = correct / test_max_elements;
     std::cout << "Recall: " << recall << "\n";
 
-    // // Serialize index
+    // Serialize index
     // std::string hnsw_path = "hnsw.bin";
     // alg_hnsw->saveIndex(hnsw_path);
     // delete alg_hnsw;

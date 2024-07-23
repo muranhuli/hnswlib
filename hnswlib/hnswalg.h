@@ -519,20 +519,22 @@ namespace hnswlib
             std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates;
             std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> candidate_set;
 
-            dist_t lowerBound;
+            dist_t lowerBound = std::numeric_limits<dist_t>::max();
             if (bare_bone_search ||
                 (!isMarkedDeleted(ep_id) && ((!isIdAllowed) || (*isIdAllowed)(getExternalLabel(ep_id)))))
             {
-                // char *ep_data = getDataByInternalId(ep_id);
-                // dist_t dist = fstdistfunc_(data_point, ep_data, dist_func_param_);
-                dist_t dist = distance(data_point, ep_id, "min");
-                lowerBound = dist;
-                top_candidates.emplace(dist, ep_id);
+                for(auto & cand : this->super_node_list_.at(ep_id)->contain_points_list)
+                {
+                    char *ep_data = getDataByInternalId(cand);
+                    dist_t dist = fstdistfunc_(data_point, ep_data, dist_func_param_);
+                    lowerBound = std::min(lowerBound, dist);
+                    top_candidates.emplace(dist, cand);
+                }
                 if (!bare_bone_search && stop_condition)
                 {
                     // stop_condition->add_point_to_result(getExternalLabel(ep_id), ep_data, dist);
                 }
-                candidate_set.emplace(-dist, ep_id);
+                candidate_set.emplace(-lowerBound, ep_id);
             }
             else
             {
@@ -600,10 +602,6 @@ namespace hnswlib
                     if (!(visited_array[candidate_id] == visited_array_tag))
                     {
                         visited_array[candidate_id] = visited_array_tag;
-
-                        // char *currObj1 = (getDataByInternalId(candidate_id));
-                        // dist_t dist = fstdistfunc_(data_point, currObj1, dist_func_param_);
-                        // dist_t dist = distance(data_point, candidate_id, "min");
                         dist_t dist =
                                 fstdistfunc_(data_point, this->super_node_list_.at(candidate_id)->center_point.data(),
                                              dist_func_param_) -
@@ -615,28 +613,29 @@ namespace hnswlib
                         }
                         else
                         {
-                            if (top_candidates.size() < ef)
-                                dist = distance(data_point, candidate_id);
-                            else if (dist < lowerBound)
-                                dist = distance(data_point, candidate_id);
                             flag_consider_candidate = top_candidates.size() < ef || lowerBound > dist;
                         }
 
                         if (flag_consider_candidate)
                         {
-                            candidate_set.emplace(-dist, candidate_id);
 #ifdef USE_SSE
                             _mm_prefetch((void *) (data_level0_memory_ +
                                                    candidate_set.top().second * size_data_per_element_ +
                                                    offsetLevel0_),  ///////////
                                          _MM_HINT_T0);  ////////////////////////
 #endif
-
+                            dist = std::numeric_limits<dist_t>::max();
                             if (bare_bone_search ||
                                 (!isMarkedDeleted(candidate_id) &&
                                  ((!isIdAllowed) || (*isIdAllowed)(getExternalLabel(candidate_id)))))
                             {
-                                top_candidates.emplace(dist, candidate_id);
+                                for (auto & cand: this->super_node_list_.at(candidate_id)->contain_points_list)
+                                {
+                                    dist_t tmp_dist = fstdistfunc_(data_point, getDataByInternalId(cand),dist_func_param_);
+                                    top_candidates.emplace(tmp_dist, cand);
+                                    dist = std::min(dist, tmp_dist);
+                                }
+                                candidate_set.emplace(-dist, candidate_id);
                                 if (!bare_bone_search && stop_condition)
                                 {
                                     // stop_condition->add_point_to_result(getExternalLabel(candidate_id), currObj1, dist);
@@ -1740,64 +1739,18 @@ namespace hnswlib
                 }
             }
 
-            std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> tmp_top_candidates;
+            std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates;
             bool bare_bone_search = !num_deleted_ && !isIdAllowed;
             if (bare_bone_search)
             {
-                tmp_top_candidates = searchBaseLayerST<true>(
+                top_candidates = searchBaseLayerST<true>(
                         currObj, query_data, std::max(ef_construction_, k), isIdAllowed);
             }
             else
             {
-                tmp_top_candidates = searchBaseLayerST<false>(
+                top_candidates = searchBaseLayerST<false>(
                         currObj, query_data, std::max(ef_construction_, k), isIdAllowed);
             }
-            std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> min_top_candidates;
-            while (!tmp_top_candidates.empty())
-            {
-                std::pair<dist_t, tableint> rez = tmp_top_candidates.top();
-                rez.first = -rez.first;
-                min_top_candidates.emplace(rez);
-                tmp_top_candidates.pop();
-            }
-
-            std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates;
-            // 展开top_candidates, 以便返回
-            while (min_top_candidates.size() > 0)
-            {
-                std::pair<dist_t, tableint> rez = min_top_candidates.top();
-                min_top_candidates.pop();
-                // 检查超点是否可以被插入，如果已经比已有的大了，则不需要
-                if (top_candidates.size() >= k)
-                {
-                    // 超点最小距离大于top_candidates中最大距离
-                    if (-rez.first > top_candidates.top().first)
-                        continue;
-                }
-                // 展开超点
-                for (auto &&point: this->super_node_list_.at(rez.second)->contain_points_list)
-                {
-                    // dist_t d = distance(query_data, point);
-                    dist_t d = fstdistfunc_(query_data, getDataByInternalId(point), dist_func_param_);
-                    if (top_candidates.size() >= k)
-                    {
-                        if (d > top_candidates.top().first)
-                            continue;
-                        else
-                            top_candidates.emplace(d, point);
-                    }
-                    else
-                    {
-                        top_candidates.emplace(d, point);
-                    }
-                    while (top_candidates.size() > k)
-                    {
-                        top_candidates.pop();
-
-                    }
-                }
-            }
-
             while (top_candidates.size() > k)
             {
                 top_candidates.pop();
