@@ -180,6 +180,7 @@ namespace hnswlib
 
         float disThreshold{0};
         size_t max_nodes_in_supernode{0};
+        mutable int calculDisNum{0};
 
 
         HierarchicalNSW(SpaceInterface<dist_t> *s)
@@ -312,6 +313,7 @@ namespace hnswlib
                 {
                     dist_t dis = fstdistfunc_(getDataByInternalId(point_id1), getDataByInternalId(point_id2),
                                               dist_func_param_);
+                    this->calculDisNum++;
                     dist = std::min(dist, dis);
                 }
             }
@@ -325,6 +327,7 @@ namespace hnswlib
             for (const tableint &point_id2: super_node_list_.at(id2)->contain_points_list)
             {
                 dist_t dis = fstdistfunc_(data, getDataByInternalId(point_id2), dist_func_param_);
+                this->calculDisNum++;
                 dist = std::min(dist, dis);
             }
             return dist;
@@ -527,6 +530,7 @@ namespace hnswlib
                 {
                     char *ep_data = getDataByInternalId(cand);
                     dist_t dist = fstdistfunc_(data_point, ep_data, dist_func_param_);
+                    this->calculDisNum++;
                     lowerBound = std::min(lowerBound, dist);
                     top_candidates.emplace(dist, cand);
                 }
@@ -606,6 +610,7 @@ namespace hnswlib
                                 fstdistfunc_(data_point, this->super_node_list_.at(candidate_id)->center_point.data(),
                                              dist_func_param_) -
                                 this->super_node_list_.at(candidate_id)->radius;
+                        this->calculDisNum++;
                         bool flag_consider_candidate;
                         if (!bare_bone_search && stop_condition)
                         {
@@ -632,8 +637,12 @@ namespace hnswlib
                                 for (auto & cand: this->super_node_list_.at(candidate_id)->contain_points_list)
                                 {
                                     dist_t tmp_dist = fstdistfunc_(data_point, getDataByInternalId(cand),dist_func_param_);
-                                    top_candidates.emplace(tmp_dist, cand);
-                                    dist = std::min(dist, tmp_dist);
+                                    this->calculDisNum++;
+                                    if (top_candidates.size() < ef || lowerBound > tmp_dist)
+                                    {
+                                        top_candidates.emplace(tmp_dist, cand);
+                                        dist = std::min(dist, tmp_dist);
+                                    }
                                 }
                                 candidate_set.emplace(-dist, candidate_id);
                                 if (!bare_bone_search && stop_condition)
@@ -1696,6 +1705,7 @@ namespace hnswlib
         std::priority_queue<std::pair<dist_t, labeltype >>
         searchKnn(const void *query_data, size_t k, BaseFilterFunctor *isIdAllowed = nullptr) const
         {
+            this->calculDisNum = 0;
             std::priority_queue<std::pair<dist_t, labeltype >> result;
             if (cur_element_count == 0) return result;
 
@@ -1726,6 +1736,7 @@ namespace hnswlib
                         dist_t d = fstdistfunc_(query_data, this->super_node_list_.at(cand)->center_point.data(),
                                                 dist_func_param_) -
                                    this->super_node_list_.at(cand)->radius;
+                        this->calculDisNum++;
                         if (d > curdist)
                             continue;
                         d = distance(query_data, cand, "min");

@@ -8,11 +8,12 @@ int main()
 {
     int M = 64;                 // Tightly connected with internal dimensionality of the data
     int ef_construction = 200;  // Controls index search speed/build speed tradeoff
-    float disThreshold = 2000000;
+    float disThreshold = 2e+06;
     size_t maxNum = 50;
+    std::string filename = "/media/disk7T/liuyu/hdf5/fashion-mnist-784-euclidean.hdf5";
 
     hsize_t dims_out[2];
-    auto data = DataRead::read_hdf5_float("/media/disk7T/liuyu/hdf5/fashion-mnist-784-euclidean.hdf5", "/train",
+    auto data = DataRead::read_hdf5_float(filename, "/train",
                                           dims_out);
     int dim = int(dims_out[1]);
     int max_elements = int(dims_out[0]);
@@ -50,10 +51,10 @@ int main()
     }
     alg_hnsw->hnsw_graph_info_stats();
 
-    auto test_data = DataRead::read_hdf5_float("/media/disk7T/liuyu/hdf5/fashion-mnist-784-euclidean.hdf5", "/test",
+    auto test_data = DataRead::read_hdf5_float(filename, "/test",
                                                dims_out);
     int test_max_elements = int(dims_out[0]);
-    auto neighbor_data = DataRead::read_hdf5_int("/media/disk7T/liuyu/hdf5/fashion-mnist-784-euclidean.hdf5",
+    auto neighbor_data = DataRead::read_hdf5_int(filename,
                                                  "/neighbors", dims_out);
     int neighbor_max_elements = int(dims_out[0]);
     int neighbor_dim = int(dims_out[1]);
@@ -64,9 +65,10 @@ int main()
     float correct = 0;
     {
         Time time("KNN Search");
+        std::ofstream fout("time.txt");
         for (int i = 0; i < test_max_elements; i++)
         {
-            schedule("ANN",i,test_max_elements);
+            // schedule("ANN",i,test_max_elements);
             int k = 10;
             std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(
                     test_data.get() + i * dim, k);
@@ -88,7 +90,9 @@ int main()
             std::set_intersection(result_label.begin(), result_label.end(), neighbor.begin(), neighbor.end(),
                                   std::inserter(intersection, intersection.begin()));
             correct += static_cast<float>(intersection.size()) / static_cast<float>(neighbor.size());
+            fout<<alg_hnsw->calculDisNum<<std::endl;
         }
+        fout.close();
     }
     float recall = correct / test_max_elements;
     std::cout << "Recall: " << recall << "\n";
