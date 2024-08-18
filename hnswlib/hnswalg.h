@@ -132,7 +132,8 @@ namespace hnswlib
                 dist_t max_dis = 0;
                 for (auto &&pair: contain_points_list)
                 {
-                    dist_t dis = parent->fstdistfunc_(center_point.data(), pair.second.data(), parent->dist_func_param_);
+                    dist_t dis = parent->fstdistfunc_(center_point.data(), pair.second.data(),
+                                                      parent->dist_func_param_);
                     max_dis = std::max(max_dis, dis);
                 }
                 radius = max_dis;
@@ -508,22 +509,13 @@ namespace hnswlib
             if (bare_bone_search ||
                 (!isMarkedDeleted(ep_id) && ((!isIdAllowed) || (*isIdAllowed)(getExternalLabel(ep_id)))))
             {
-                for(auto &&pair: this->super_node_list_.at(ep_id)->contain_points_list)
+                for (auto &&pair: this->super_node_list_.at(ep_id)->contain_points_list)
                 {
                     dist_t dist = fstdistfunc_(data_point, pair.second.data(), dist_func_param_);
                     this->calculDisNum++;
                     lowerBound = std::min(lowerBound, dist);
                     top_candidates.emplace(dist, pair.first);
                 }
-
-                // for (auto &cand: this->super_node_list_.at(ep_id)->contain_points_list)
-                // {
-                //     char *ep_data = getDataByInternalId(cand);
-                //     dist_t dist = fstdistfunc_(data_point, ep_data, dist_func_param_);
-                //     this->calculDisNum++;
-                //     lowerBound = std::min(lowerBound, dist);
-                //     top_candidates.emplace(dist, cand);
-                // }
                 if (!bare_bone_search && stop_condition)
                 {
                     // stop_condition->add_point_to_result(getExternalLabel(ep_id), ep_data, dist);
@@ -596,10 +588,6 @@ namespace hnswlib
                     if (!(visited_array[candidate_id] == visited_array_tag))
                     {
                         visited_array[candidate_id] = visited_array_tag;
-                        // dist_t dist =
-                        //         fstdistfunc_(data_point, this->super_node_list_.at(candidate_id)->center_point.data(),
-                        //                      dist_func_param_) -
-                        //         this->super_node_list_.at(candidate_id)->radius;
                         dist_t dist = distance(data_point, candidate_id, "estimate_min");
                         this->calculDisNum++;
                         bool flag_consider_candidate;
@@ -620,7 +608,7 @@ namespace hnswlib
                                                    offsetLevel0_),  ///////////
                                          _MM_HINT_T0);  ////////////////////////
 #endif
-                            dist = std::numeric_limits<dist_t>::max();
+                            // dist = std::numeric_limits<dist_t>::max();
                             if (bare_bone_search ||
                                 (!isMarkedDeleted(candidate_id) &&
                                  ((!isIdAllowed) || (*isIdAllowed)(getExternalLabel(candidate_id)))))
@@ -635,16 +623,9 @@ namespace hnswlib
                                         dist = std::min(dist, tmp_dist);
                                     }
                                 }
-                                // for (auto &cand: this->super_node_list_.at(candidate_id)->contain_points_list)
+                                // if (top_candidates.size() < ef || lowerBound > dist)
                                 // {
-                                //     dist_t tmp_dist = fstdistfunc_(data_point, getDataByInternalId(cand),
-                                //                                    dist_func_param_);
-                                //     this->calculDisNum++;
-                                //     if (top_candidates.size() < ef || lowerBound > tmp_dist)
-                                //     {
-                                //         top_candidates.emplace(tmp_dist, cand);
-                                //         dist = std::min(dist, tmp_dist);
-                                //     }
+                                //     top_candidates.emplace(dist, candidate_id);
                                 // }
                                 candidate_set.emplace(-dist, candidate_id);
                                 if (!bare_bone_search && stop_condition)
@@ -1703,7 +1684,6 @@ namespace hnswlib
             if (cur_element_count == 0) return result;
 
             tableint currObj = enterpoint_node_;
-            // dist_t curdist = fstdistfunc_(query_data, getDataByInternalId(enterpoint_node_), dist_func_param_);
             dist_t curdist = distance(query_data, currObj, "standard_min");
 
             for (int level = maxlevel_; level > 0; level--)
@@ -1725,11 +1705,7 @@ namespace hnswlib
                         tableint cand = datal[i];
                         if (cand < 0 || cand > max_elements_)
                             throw std::runtime_error("cand error");
-                        // dist_t d = fstdistfunc_(query_data, getDataByInternalId(cand), dist_func_param_);
-                        // dist_t d = fstdistfunc_(query_data, this->super_node_list_.at(cand)->center_point.data(),
-                        //                         dist_func_param_) -
-                        //            this->super_node_list_.at(cand)->radius;
-                        dist_t d = distance(query_data,cand,"estimate_min");
+                        dist_t d = distance(query_data, cand, "estimate_min");
                         this->calculDisNum++;
                         if (d > curdist)
                             continue;

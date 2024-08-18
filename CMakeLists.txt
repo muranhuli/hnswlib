@@ -75,6 +75,9 @@ if(HNSWLIB_EXAMPLES)
     endif()
 
     # examples
+    add_executable(statistics_data examples/cpp/statistics_data.cpp)
+    target_link_libraries(statistics_data hnswlib)
+
     add_executable(example_search examples/cpp/example_search.cpp)
     target_link_libraries(example_search hnswlib)
 
