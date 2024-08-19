@@ -109,4 +109,33 @@ void schedule(const std::string &content, int i, int max_elements)
         std::cout << "\r"<<content<<" " << i << "/" << max_elements << std::flush;
 }
 
+class CounterSingleton {
+public:
+    static CounterSingleton& getInstance() {
+        static CounterSingleton instance;
+        return instance;
+    }
+
+    void increment() {
+        count++;
+    }
+
+    // 清空计数器
+    void clear() {
+        count = 0;
+    }
+
+    int getCount() const {
+        return count;
+    }
+
+private:
+    int count;
+
+    CounterSingleton() : count(0) {}
+    CounterSingleton(const CounterSingleton&) = delete;
+    CounterSingleton& operator=(const CounterSingleton&) = delete;
+};
+
+
 #endif //HNSWLIB_UTILS_H
