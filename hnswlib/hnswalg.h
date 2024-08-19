@@ -77,14 +77,13 @@ namespace hnswlib
 
         // 自定义数据结构
         std::vector<float> raw_vector_data_;
+        std::vector<float> raw_vector_center_data_;
 
         class SuperNode
         {
         public:
             tableint id;
-            std::vector<float> center_point;
             std::vector<tableint> contain_points_list;
-            dist_t radius;
             HierarchicalNSW<dist_t> *parent;
 
             SuperNode() : parent(nullptr)
@@ -94,8 +93,6 @@ namespace hnswlib
             {
                 this->id = id_;
                 this->parent = parent;
-                center_point.resize(*((size_t *) this->parent->dist_func_param_));
-                center_point.assign(center_point.size(), 0.0f);
             }
 
             /// 将一个普通顶点合并至超点
@@ -114,7 +111,7 @@ namespace hnswlib
             // 更新超点中心点
             void update_center_point()
             {
-                center_point.assign(center_point.size(), 0.0f);
+                std::vector<float> center_point(*((size_t *) this->parent->dist_func_param_), 0.0f);
                 for (tableint point_id: contain_points_list)
                 {
                     auto point_data = (float *) parent->getDataByInternalId(point_id);
@@ -123,9 +120,9 @@ namespace hnswlib
                         center_point[i] += point_data[i];
                     }
                 }
-                for (float &i: center_point)
+                for(size_t i = 0; i < center_point.size(); i++)
                 {
-                    i /= contain_points_list.size();
+                    parent->raw_vector_center_data_[this->id*center_point.size()+i] = center_point[i]/contain_points_list.size();
                 }
             }
 
@@ -137,15 +134,16 @@ namespace hnswlib
                 for (tableint point_id: contain_points_list)
                 {
                     auto point_data = (float *) parent->getDataByInternalId(point_id);
-                    dist_t dis = parent->fstdistfunc_(center_point.data(), point_data, parent->dist_func_param_);
+                    dist_t dis = parent->fstdistfunc_(parent->getDataByInternalSuperNodeId(this->id), point_data, parent->dist_func_param_);
                     max_dis = std::max(max_dis, dis);
                 }
-                radius = max_dis;
+                parent->radius[this->id] = max_dis;
             }
         };
 
         std::vector<SuperNode *> super_node_list_;
         std::vector<tableint> node_to_super_node_;
+        std::vector<float> radius;
         tableint cur_super_node_count{0};
 
         float disThreshold{0};
@@ -235,6 +233,8 @@ namespace hnswlib
 
             // 自定义数据
             raw_vector_data_.resize(max_elements_ * (*((size_t *) dist_func_param_)), 0.0f);
+            raw_vector_center_data_.resize(max_elements_ * (*((size_t *) dist_func_param_)), 0.0f);
+            radius.resize(max_elements_, 0.0f);
             node_to_super_node_.resize(max_elements_, 0);
         }
 
@@ -288,12 +288,12 @@ namespace hnswlib
             return dist;
         }
 
-        dist_t distance_estimate(tableint id1, tableint id2) const
-        {
-            return fstdistfunc_(super_node_list_.at(id1)->center_point.data(),
-                                super_node_list_.at(id2)->center_point.data(), dist_func_param_)
-                   - super_node_list_.at(id1)->radius - super_node_list_.at(id2)->radius;
-        }
+        // dist_t distance_estimate(tableint id1, tableint id2) const
+        // {
+        //     return fstdistfunc_(super_node_list_.at(id1)->center_point.data(),
+        //                         super_node_list_.at(id2)->center_point.data(), dist_func_param_)
+        //            - super_node_list_.at(id1)->radius - super_node_list_.at(id2)->radius;
+        // }
 
         dist_t distance_standard(const void *data, tableint id2) const
         {
@@ -309,9 +309,8 @@ namespace hnswlib
 
         dist_t distance_estimate(const void *data, tableint id2, const std::string &mode = "normal") const
         {
+            return fstdistfunc_(data, getDataByInternalSuperNodeId(id2), dist_func_param_) - radius[id2];
             return fstdistfunc_(data, getDataByInternalId(id2), dist_func_param_);
-            // return fstdistfunc_(data, super_node_list_.at(id2)->center_point.data(), dist_func_param_)
-            //        ;
         }
 
         struct CompareByFirst
@@ -363,6 +362,12 @@ namespace hnswlib
         inline char *getDataByInternalId(tableint internal_id) const
         {
             return (char *) (&raw_vector_data_[internal_id * (*((size_t *) this->dist_func_param_))]);
+            // return (char*)(raw_vector_data_.data()+internal_id*(*((size_t *)this->parent->dist_func_param_)));
+            // return (data_level0_memory_ + internal_id * size_data_per_element_ + offsetData_);
+        }
+        inline char *getDataByInternalSuperNodeId(tableint internal_id) const
+        {
+            return (char *) (&raw_vector_center_data_[internal_id * (*((size_t *) this->dist_func_param_))]);
             // return (char*)(raw_vector_data_.data()+internal_id*(*((size_t *)this->parent->dist_func_param_)));
             // return (data_level0_memory_ + internal_id * size_data_per_element_ + offsetData_);
         }
@@ -1255,7 +1260,7 @@ namespace hnswlib
             {
                 if (this->super_node_list_.at(superNode)->contain_points_list.size() >= max_nodes_in_supernode)
                     continue;
-                dist_t dist = fstdistfunc_(data_point, this->super_node_list_[superNode]->center_point.data(),
+                dist_t dist = fstdistfunc_(data_point, getDataByInternalSuperNodeId(superNode),
                                            dist_func_param_);
                 if (dist < min_dist)
                 {

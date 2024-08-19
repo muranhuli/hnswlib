@@ -33,16 +33,16 @@ int main()
         for (int i = 0; i < max_elements; i++)
         {
             schedule("AddPoint",i,max_elements);
-            // std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(data.get() + i * dim, 20);
-            // std::set<int> result_label;
-            // while (!result.empty())
-            // {
-            //     result_label.insert(int(result.top().second));
-            //     result.pop();
-            // }
-            //
-            // if (result_label.empty() or
-            //     !alg_hnsw->addPointToSuperNode(data.get() + i * dim, result_label))
+            std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(data.get() + i * dim, 20);
+            std::set<int> result_label;
+            while (!result.empty())
+            {
+                result_label.insert(int(result.top().second));
+                result.pop();
+            }
+
+            if (result_label.empty() or
+                !alg_hnsw->addPointToSuperNode(data.get() + i * dim, result_label))
             {
                 hnswlib::labeltype label = alg_hnsw->cur_super_node_count;
                 alg_hnsw->addPoint(data.get() + i * dim, label);
