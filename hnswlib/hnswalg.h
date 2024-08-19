@@ -268,11 +268,12 @@ namespace hnswlib
             std::cout << "The size of edge is " << sum_edge << std::endl;
         }
 
-        dist_t distance(tableint id1, tableint id2, const std::string &mode) const
+        inline dist_t distance(tableint id1, tableint id2, const std::string &mode) const
         {
             // 求两个超边中任意两个顶点之间的最短距离
-            static_assert(std::numeric_limits<dist_t>::has_infinity);
-            dist_t dist = std::numeric_limits<dist_t>::infinity();
+            // static_assert(std::numeric_limits<dist_t>::has_infinity);
+            // dist_t dist = std::numeric_limits<dist_t>::infinity();
+            dist_t dist = INT64_MAX;
             if (mode == "standard_min")
             {
                 for (auto &&pair1: super_node_list_.at(id1)->contain_points_list)
@@ -291,14 +292,16 @@ namespace hnswlib
                 dist = fstdistfunc_(super_node_list_.at(id1)->center_point.data(),
                                     super_node_list_.at(id2)->center_point.data(), dist_func_param_)
                        - super_node_list_.at(id1)->radius - super_node_list_.at(id2)->radius;
+                this->calculDisNum++;
             }
             return dist;
         }
 
-        dist_t distance(const void *data, tableint id2, const std::string &mode) const
+        inline dist_t distance(const void *data, tableint id2, const std::string &mode) const
         {
-            static_assert(std::numeric_limits<dist_t>::has_infinity);
-            dist_t dist = std::numeric_limits<dist_t>::infinity();
+            // static_assert(std::numeric_limits<dist_t>::has_infinity);
+            // dist_t dist = std::numeric_limits<dist_t>::infinity();
+            dist_t dist = INT64_MAX;
             if (mode == "standard_min")
             {
                 for (auto &&pair: super_node_list_.at(id2)->contain_points_list)
@@ -312,6 +315,7 @@ namespace hnswlib
             {
                 dist = fstdistfunc_(data, super_node_list_.at(id2)->center_point.data(), dist_func_param_)
                        - super_node_list_.at(id2)->radius;
+                this->calculDisNum++;
             }
             return dist;
         }
@@ -589,7 +593,6 @@ namespace hnswlib
                     {
                         visited_array[candidate_id] = visited_array_tag;
                         dist_t dist = distance(data_point, candidate_id, "estimate_min");
-                        this->calculDisNum++;
                         bool flag_consider_candidate;
                         if (!bare_bone_search && stop_condition)
                         {
@@ -608,7 +611,7 @@ namespace hnswlib
                                                    offsetLevel0_),  ///////////
                                          _MM_HINT_T0);  ////////////////////////
 #endif
-                            // dist = std::numeric_limits<dist_t>::max();
+                            dist = std::numeric_limits<dist_t>::max();
                             if (bare_bone_search ||
                                 (!isMarkedDeleted(candidate_id) &&
                                  ((!isIdAllowed) || (*isIdAllowed)(getExternalLabel(candidate_id)))))
@@ -1706,7 +1709,6 @@ namespace hnswlib
                         if (cand < 0 || cand > max_elements_)
                             throw std::runtime_error("cand error");
                         dist_t d = distance(query_data, cand, "estimate_min");
-                        this->calculDisNum++;
                         if (d > curdist)
                             continue;
                         d = distance(query_data, cand, "standard_min");

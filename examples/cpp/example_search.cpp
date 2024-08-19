@@ -65,10 +65,10 @@ int main()
     float correct = 0;
     {
         Time time("KNN Search");
-        std::ofstream fout("time.txt");
+        std::ofstream fout("calculDisNum.txt");
         for (int i = 0; i < test_max_elements; i++)
         {
-            // schedule("ANN",i,test_max_elements);
+            schedule("ANN",i,test_max_elements);
             int k = 10;
             std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(
                     test_data.get() + i * dim, k);
