@@ -275,11 +275,14 @@ namespace hnswlib
             dist_t dist = INT64_MAX;
             if (mode == "standard_min")
             {
-                for (auto &&pair1: super_node_list_.at(id1)->contain_points_list)
+                auto &list1 = super_node_list_.at(id1)->contain_points_list;
+                auto &list2 = super_node_list_.at(id2)->contain_points_list;
+
+                for (size_t i = 0; i < list1.size(); ++i)
                 {
-                    for (auto &&pair2: super_node_list_.at(id2)->contain_points_list)
+                    for (size_t j = 0; j < list2.size(); ++j)
                     {
-                        dist_t dis = fstdistfunc_(pair1.second.data(), pair2.second.data(), dist_func_param_);
+                        dist_t dis = fstdistfunc_(list1[i].second.data(), list2[j].second.data(), dist_func_param_);
                         dist = std::min(dist, dis);
                     }
                 }
@@ -301,9 +304,10 @@ namespace hnswlib
             dist_t dist = INT64_MAX;
             if (mode == "standard_min")
             {
-                for (auto &&pair: super_node_list_.at(id2)->contain_points_list)
+                auto &list2 = super_node_list_.at(id2)->contain_points_list;
+                for (size_t j = 0; j < list2.size(); ++j)
                 {
-                    dist_t dis = fstdistfunc_(data, pair.second.data(), dist_func_param_);
+                    dist_t dis = fstdistfunc_(data, list2[j].second.data(), dist_func_param_);
                     dist = std::min(dist, dis);
                 }
             }
@@ -610,7 +614,7 @@ namespace hnswlib
                                 (!isMarkedDeleted(candidate_id) &&
                                  ((!isIdAllowed) || (*isIdAllowed)(getExternalLabel(candidate_id)))))
                             {
-                                for(auto &&pair: this->super_node_list_.at(candidate_id)->contain_points_list)
+                                for (auto &&pair: this->super_node_list_.at(candidate_id)->contain_points_list)
                                 {
                                     dist_t tmp_dist = fstdistfunc_(data_point, pair.second.data(), dist_func_param_);
                                     if (top_candidates.size() < ef || lowerBound > tmp_dist)

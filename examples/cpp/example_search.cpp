@@ -17,31 +17,32 @@ int main()
     int dim = int(dims_out[1]);
     int max_elements = int(dims_out[0]);
 
-    std::cout<<"dim="<<dim<<" max_elements="<<max_elements<<" M="<<M<<" ef_construction="<<ef_construction<<std::endl;
-    std::cout<<"disThreshold="<<disThreshold<<" maxNum="<<maxNum<<std::endl;
+    std::cout << "dim=" << dim << " max_elements=" << max_elements << " M=" << M << " ef_construction="
+              << ef_construction << std::endl;
+    std::cout << "disThreshold=" << disThreshold << " maxNum=" << maxNum << std::endl;
 
     // Initing index
     hnswlib::L2Space space(dim);
     auto *alg_hnsw = new hnswlib::HierarchicalNSW<float>(&space, max_elements, disThreshold,
                                                          maxNum, M,
-                                                         ef_construction, 100,true);
+                                                         ef_construction, 100, true);
 
     // Add data to index
     {
         Time time("Build Index");
         for (int i = 0; i < max_elements; i++)
         {
-            schedule("AddPoint",i,max_elements);
-            std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(data.get() + i * dim, 20);
-            std::set<int> result_label;
-            while (!result.empty())
-            {
-                result_label.insert(int(result.top().second));
-                result.pop();
-            }
-
-            if (result_label.empty() or
-                !alg_hnsw->addPointToSuperNode(data.get() + i * dim, result_label))
+            schedule("AddPoint", i, max_elements);
+            // std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(data.get() + i * dim, 20);
+            // std::set<int> result_label;
+            // while (!result.empty())
+            // {
+            //     result_label.insert(int(result.top().second));
+            //     result.pop();
+            // }
+            //
+            // if (result_label.empty() or
+            //     !alg_hnsw->addPointToSuperNode(data.get() + i * dim, result_label))
             {
                 hnswlib::labeltype label = alg_hnsw->cur_super_node_count;
                 alg_hnsw->addPoint(data.get() + i * dim, label);
@@ -67,7 +68,7 @@ int main()
         std::ofstream fout("calculDisNum.txt");
         for (int i = 0; i < test_max_elements; i++)
         {
-            schedule("ANN",i,test_max_elements);
+            schedule("ANN", i, test_max_elements);
             int k = 10;
             CounterSingleton::getInstance().clear();
             std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(
@@ -90,7 +91,7 @@ int main()
             std::set_intersection(result_label.begin(), result_label.end(), neighbor.begin(), neighbor.end(),
                                   std::inserter(intersection, intersection.begin()));
             correct += static_cast<float>(intersection.size()) / static_cast<float>(neighbor.size());
-            fout<<CounterSingleton::getInstance().getCount()<<std::endl;
+            fout << CounterSingleton::getInstance().getCount() << std::endl;
         }
         fout.close();
     }
