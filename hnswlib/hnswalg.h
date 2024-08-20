@@ -274,15 +274,58 @@ namespace hnswlib
 
         dist_t distance_standard(tableint id1, tableint id2) const
         {
-            static_assert(std::numeric_limits<dist_t>::has_infinity);
-            dist_t dist = std::numeric_limits<dist_t>::infinity();
-            for (tableint point_id1: super_node_list_[id1]->contain_points_list)
+            dist_t dist = INT64_MAX;
+            auto &list1 = super_node_list_.at(id1)->contain_points_list;
+            auto &list2 = super_node_list_.at(id2)->contain_points_list;
+
+            size_t qty = *((size_t *) dist_func_param_);
+            float PORTABLE_ALIGN32 TmpRes[8];
+            size_t qty16 = qty >> 4;
+            __m256 diff, v1, v2;
+            __m256 regs[13];
+            std::vector<float*> pVects(13, nullptr);
+            for (size_t i = 0; i < list1.size(); ++i)
             {
-                for (tableint point_id2: super_node_list_[id2]->contain_points_list)
+                for (size_t j = 0; j < list2.size(); j = j + 13)
                 {
-                    dist_t dis = fstdistfunc_(getDataByInternalId(point_id1), getDataByInternalId(point_id2),
-                                              dist_func_param_);
-                    dist = std::min(dist, dis);
+                    size_t len = std::min(list2.size() - j, static_cast<size_t>(13));
+                    float *pVect = (float*)getDataByInternalId(list1[i]);
+                    const float *pEnd = pVect + (qty16 << 4);
+                    for (size_t k = 0; k < len; ++k)
+                    {
+                        pVects[k] = (float*)getDataByInternalId(list2[j + k]);
+                    }
+                    for (auto &reg: regs)
+                    {
+                        reg = _mm256_set1_ps(0.0f);
+                    }
+                    while (pVect < pEnd)
+                    {
+                        v1 = _mm256_loadu_ps(pVect);
+                        for (size_t k = 0; k < len; ++k)
+                        {
+                            v2 = _mm256_loadu_ps(pVects[k]);
+                            pVects[k] += 8;
+                            diff = _mm256_sub_ps(v1, v2);
+                            regs[k] = _mm256_add_ps(regs[k], _mm256_mul_ps(diff, diff));
+                        }
+                        pVect += 8;
+                        v1 = _mm256_loadu_ps(pVect);
+                        for (size_t k = 0; k < len; ++k)
+                        {
+                            v2 = _mm256_loadu_ps(pVects[k]);
+                            pVects[k] += 8;
+                            diff = _mm256_sub_ps(v1, v2);
+                            regs[k] = _mm256_add_ps(regs[k], _mm256_mul_ps(diff, diff));
+                        }
+                        pVect += 8;
+                    }
+                    for (size_t k = 0; k < len; ++k)
+                    {
+                        _mm256_store_ps(TmpRes, regs[k]);
+                        dist = std::min(dist, TmpRes[0] + TmpRes[1] + TmpRes[2] + TmpRes[3] + TmpRes[4] + TmpRes[5] +
+                                              TmpRes[6] + TmpRes[7]);
+                    }
                 }
             }
             return dist;
@@ -297,20 +340,114 @@ namespace hnswlib
 
         dist_t distance_standard(const void *data, tableint id2) const
         {
-            static_assert(std::numeric_limits<dist_t>::has_infinity);
-            dist_t dist = std::numeric_limits<dist_t>::infinity();
-            for (const tableint &point_id2: super_node_list_.at(id2)->contain_points_list)
+            dist_t dist = INT64_MAX;
+            auto &list2 = super_node_list_.at(id2)->contain_points_list;
+
+            size_t qty = *((size_t *) dist_func_param_);
+            float PORTABLE_ALIGN32 TmpRes[8];
+            size_t qty16 = qty >> 4;
+            __m256 diff, v1, v2;
+            __m256 regs[13];
+            std::vector<float *> pVects(13, nullptr);
+            for (size_t j = 0; j < list2.size(); j = j + 13)
             {
-                dist_t dis = fstdistfunc_(data, getDataByInternalId(point_id2), dist_func_param_);
-                dist = std::min(dist, dis);
+                size_t len = std::min(list2.size() - j, static_cast<size_t>(13));
+                float *pVect = (float *) data;
+                const float *pEnd = pVect + (qty16 << 4);
+                for (size_t k = 0; k < len; ++k)
+                {
+                    pVects[k] = (float*)getDataByInternalId(list2[j + k]);
+                }
+                for (auto &reg: regs)
+                {
+                    reg = _mm256_set1_ps(0.0f);
+                }
+                while (pVect < pEnd)
+                {
+                    v1 = _mm256_loadu_ps(pVect);
+                    for (size_t k = 0; k < len; ++k)
+                    {
+                        v2 = _mm256_loadu_ps(pVects[k]);
+                        pVects[k] += 8;
+                        diff = _mm256_sub_ps(v1, v2);
+                        regs[k] = _mm256_add_ps(regs[k], _mm256_mul_ps(diff, diff));
+                    }
+                    pVect += 8;
+                    v1 = _mm256_loadu_ps(pVect);
+                    for (size_t k = 0; k < len; ++k)
+                    {
+                        v2 = _mm256_loadu_ps(pVects[k]);
+                        pVects[k] += 8;
+                        diff = _mm256_sub_ps(v1, v2);
+                        regs[k] = _mm256_add_ps(regs[k], _mm256_mul_ps(diff, diff));
+                    }
+                    pVect += 8;
+                }
+                for (size_t k = 0; k < len; ++k)
+                {
+                    _mm256_store_ps(TmpRes, regs[k]);
+                    dist = std::min(dist, TmpRes[0] + TmpRes[1] + TmpRes[2] + TmpRes[3] + TmpRes[4] + TmpRes[5] +
+                                          TmpRes[6] + TmpRes[7]);
+                }
             }
+
             return dist;
         }
 
         dist_t distance_estimate(const void *data, tableint id2, const std::string &mode = "normal") const
         {
-            return fstdistfunc_(data, getDataByInternalSuperNodeId(id2), dist_func_param_) - radius[id2];
-            return fstdistfunc_(data, getDataByInternalId(id2), dist_func_param_);
+            dist_t dist = INT64_MAX;
+            auto &list2 = super_node_list_.at(id2)->contain_points_list;
+
+            size_t qty = *((size_t *) dist_func_param_);
+            float PORTABLE_ALIGN32 TmpRes[8];
+            size_t qty16 = qty >> 4;
+            __m256 diff, v1, v2;
+            __m256 regs[13];
+            std::vector<float *> pVects(13, nullptr);
+            for (size_t j = 0; j < list2.size(); j = j + 13)
+            {
+                size_t len = std::min(list2.size() - j, static_cast<size_t>(13));
+                float *pVect = (float *) data;
+                const float *pEnd = pVect + (qty16 << 4);
+                for (size_t k = 0; k < len; ++k)
+                {
+                    pVects[k] = (float*)getDataByInternalId(list2[j + k]);
+                }
+                for (auto &reg: regs)
+                {
+                    reg = _mm256_set1_ps(0.0f);
+                }
+                while (pVect < pEnd)
+                {
+                    v1 = _mm256_loadu_ps(pVect);
+                    for (size_t k = 0; k < len; ++k)
+                    {
+                        v2 = _mm256_loadu_ps(pVects[k]);
+                        pVects[k] += 8;
+                        diff = _mm256_sub_ps(v1, v2);
+                        regs[k] = _mm256_add_ps(regs[k], _mm256_mul_ps(diff, diff));
+                    }
+                    pVect += 8;
+                    v1 = _mm256_loadu_ps(pVect);
+                    for (size_t k = 0; k < len; ++k)
+                    {
+                        v2 = _mm256_loadu_ps(pVects[k]);
+                        pVects[k] += 8;
+                        diff = _mm256_sub_ps(v1, v2);
+                        regs[k] = _mm256_add_ps(regs[k], _mm256_mul_ps(diff, diff));
+                    }
+                    pVect += 8;
+                }
+                for (size_t k = 0; k < len; ++k)
+                {
+                    _mm256_store_ps(TmpRes, regs[k]);
+                    dist = std::min(dist, TmpRes[0] + TmpRes[1] + TmpRes[2] + TmpRes[3] + TmpRes[4] + TmpRes[5] +
+                                          TmpRes[6] + TmpRes[7]);
+                }
+            }
+
+            return dist;
         }
 
         struct CompareByFirst
