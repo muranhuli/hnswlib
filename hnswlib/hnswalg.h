@@ -269,53 +269,116 @@ namespace hnswlib
 
         inline dist_t distance(tableint id1, tableint id2, const std::string &mode) const
         {
-            // 求两个超边中任意两个顶点之间的最短距离
-            // static_assert(std::numeric_limits<dist_t>::has_infinity);
-            // dist_t dist = std::numeric_limits<dist_t>::infinity();
             dist_t dist = INT64_MAX;
-            if (mode == "standard_min")
-            {
-                auto &list1 = super_node_list_.at(id1)->contain_points_list;
-                auto &list2 = super_node_list_.at(id2)->contain_points_list;
+            auto &list1 = super_node_list_.at(id1)->contain_points_list;
+            auto &list2 = super_node_list_.at(id2)->contain_points_list;
 
-                for (size_t i = 0; i < list1.size(); ++i)
+            size_t qty = *((size_t *) dist_func_param_);
+            float PORTABLE_ALIGN32 TmpRes[8];
+            size_t qty16 = qty >> 4;
+            __m256 diff, v1, v2;
+            __m256 regs[13];
+            std::vector<float*> pVects(13, nullptr);
+            for (size_t i = 0; i < list1.size(); ++i)
+            {
+                for (size_t j = 0; j < list2.size(); j = j + 13)
                 {
-                    for (size_t j = 0; j < list2.size(); ++j)
+                    size_t len = std::min(list2.size() - j, static_cast<size_t>(13));
+                    float *pVect = list1[i].second.data();
+                    const float *pEnd = pVect + (qty16 << 4);
+                    for (size_t k = 0; k < len; ++k)
                     {
-                        dist_t dis = fstdistfunc_(list1[i].second.data(), list2[j].second.data(), dist_func_param_);
-                        dist = std::min(dist, dis);
+                        pVects[k] = list2[j + k].second.data();
+                    }
+                    for (auto &reg: regs)
+                    {
+                        reg = _mm256_set1_ps(0.0f);
+                    }
+                    while (pVect < pEnd)
+                    {
+                        v1 = _mm256_loadu_ps(pVect);
+                        for (size_t k = 0; k < len; ++k)
+                        {
+                            v2 = _mm256_loadu_ps(pVects[k]);
+                            pVects[k] += 8;
+                            diff = _mm256_sub_ps(v1, v2);
+                            regs[k] = _mm256_add_ps(regs[k], _mm256_mul_ps(diff, diff));
+                        }
+                        pVect += 8;
+                        v1 = _mm256_loadu_ps(pVect);
+                        for (size_t k = 0; k < len; ++k)
+                        {
+                            v2 = _mm256_loadu_ps(pVects[k]);
+                            pVects[k] += 8;
+                            diff = _mm256_sub_ps(v1, v2);
+                            regs[k] = _mm256_add_ps(regs[k], _mm256_mul_ps(diff, diff));
+                        }
+                        pVect += 8;
+                    }
+                    for (size_t k = 0; k < len; ++k)
+                    {
+                        _mm256_store_ps(TmpRes, regs[k]);
+                        dist = std::min(dist, TmpRes[0] + TmpRes[1] + TmpRes[2] + TmpRes[3] + TmpRes[4] + TmpRes[5] +
+                                              TmpRes[6] + TmpRes[7]);
                     }
                 }
-            }
-                // 估计最小值，利用超点的中心点和半径
-            else if (mode == "estimate_min")
-            {
-                dist = fstdistfunc_(super_node_list_.at(id1)->center_point.data(),
-                                    super_node_list_.at(id2)->center_point.data(), dist_func_param_)
-                       - super_node_list_.at(id1)->radius - super_node_list_.at(id2)->radius;
             }
             return dist;
         }
 
         inline dist_t distance(const void *data, tableint id2, const std::string &mode) const
         {
-            // static_assert(std::numeric_limits<dist_t>::has_infinity);
-            // dist_t dist = std::numeric_limits<dist_t>::infinity();
             dist_t dist = INT64_MAX;
-            if (mode == "standard_min")
+            auto &list2 = super_node_list_.at(id2)->contain_points_list;
+
+            size_t qty = *((size_t *) dist_func_param_);
+            float PORTABLE_ALIGN32 TmpRes[8];
+            size_t qty16 = qty >> 4;
+            __m256 diff, v1, v2;
+            __m256 regs[13];
+            std::vector<float *> pVects(13, nullptr);
+            for (size_t j = 0; j < list2.size(); j = j + 13)
             {
-                auto &list2 = super_node_list_.at(id2)->contain_points_list;
-                for (size_t j = 0; j < list2.size(); ++j)
+                size_t len = std::min(list2.size() - j, static_cast<size_t>(13));
+                float *pVect = (float *) data;
+                const float *pEnd = pVect + (qty16 << 4);
+                for (size_t k = 0; k < len; ++k)
                 {
-                    dist_t dis = fstdistfunc_(data, list2[j].second.data(), dist_func_param_);
-                    dist = std::min(dist, dis);
+                    pVects[k] = list2[j + k].second.data();
+                }
+                for (auto &reg: regs)
+                {
+                    reg = _mm256_set1_ps(0.0f);
+                }
+                while (pVect < pEnd)
+                {
+                    v1 = _mm256_loadu_ps(pVect);
+                    for (size_t k = 0; k < len; ++k)
+                    {
+                        v2 = _mm256_loadu_ps(pVects[k]);
+                        pVects[k] += 8;
+                        diff = _mm256_sub_ps(v1, v2);
+                        regs[k] = _mm256_add_ps(regs[k], _mm256_mul_ps(diff, diff));
+                    }
+                    pVect += 8;
+                    v1 = _mm256_loadu_ps(pVect);
+                    for (size_t k = 0; k < len; ++k)
+                    {
+                        v2 = _mm256_loadu_ps(pVects[k]);
+                        pVects[k] += 8;
+                        diff = _mm256_sub_ps(v1, v2);
+                        regs[k] = _mm256_add_ps(regs[k], _mm256_mul_ps(diff, diff));
+                    }
+                    pVect += 8;
+                }
+                for (size_t k = 0; k < len; ++k)
+                {
+                    _mm256_store_ps(TmpRes, regs[k]);
+                    dist = std::min(dist, TmpRes[0] + TmpRes[1] + TmpRes[2] + TmpRes[3] + TmpRes[4] + TmpRes[5] +
+                                          TmpRes[6] + TmpRes[7]);
                 }
             }
-            else if (mode == "estimate_min")
-            {
-                dist = fstdistfunc_(data, super_node_list_.at(id2)->center_point.data(), dist_func_param_)
-                       - super_node_list_.at(id2)->radius;
-            }
+
             return dist;
         }
 
