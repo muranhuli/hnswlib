@@ -12,6 +12,8 @@
 #include <vector>
 #include <limits>
 #include <set>
+#include <tbb/concurrent_priority_queue.h>
+#include <tbb/parallel_for.h>
 
 namespace hnswlib
 {
@@ -493,7 +495,7 @@ namespace hnswlib
 
         // bare_bone_search means there is no check for deletions and stop condition is ignored in return of extra performance
         template<bool bare_bone_search = true, bool collect_metrics = false>
-        std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst>
+        tbb::concurrent_priority_queue<std::pair<dist_t, tableint>, CompareByFirst>
         searchBaseLayerST(
                 tableint ep_id,
                 const void *data_point,
@@ -505,7 +507,7 @@ namespace hnswlib
             vl_type *visited_array = vl->mass;
             vl_type visited_array_tag = vl->curV;
 
-            std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates;
+            tbb::concurrent_priority_queue<std::pair<dist_t, tableint>, CompareByFirst> top_candidates;
             std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> candidate_set;
 
             dist_t lowerBound = std::numeric_limits<dist_t>::max();
@@ -627,7 +629,7 @@ namespace hnswlib
                                 }
                                 // if (top_candidates.size() < ef || lowerBound > dist)
                                 // {
-                                //     top_candidates.emplace(dist, candidate_id);
+                                //     top_candidates.push(dist, candidate_id);
                                 //     dist = std::min(dist, dist);
                                 // }
                                 candidate_set.emplace(-dist, candidate_id);
@@ -648,8 +650,10 @@ namespace hnswlib
                             }
                             while (flag_remove_extra)
                             {
-                                tableint id = top_candidates.top().second;
-                                top_candidates.pop();
+                                std::pair<dist_t, tableint> value;
+                                top_candidates.try_pop(value);
+                                tableint id = value.second;
+
                                 if (!bare_bone_search && stop_condition)
                                 {
                                     stop_condition->remove_point_from_result(getExternalLabel(id),
@@ -663,7 +667,12 @@ namespace hnswlib
                             }
 
                             if (!top_candidates.empty())
-                                lowerBound = top_candidates.top().first;
+                            {
+                                std::pair<dist_t, tableint> value;
+                                top_candidates.try_pop(value);
+                                lowerBound = value.first;
+                                top_candidates.push(value);
+                            }
                         }
                     }
                 }
@@ -1718,7 +1727,7 @@ namespace hnswlib
                 }
             }
 
-            std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates;
+            tbb::concurrent_priority_queue<std::pair<dist_t, tableint>, CompareByFirst> top_candidates;
             bool bare_bone_search = !num_deleted_ && !isIdAllowed;
             if (bare_bone_search)
             {
@@ -1732,13 +1741,14 @@ namespace hnswlib
             }
             while (top_candidates.size() > k)
             {
-                top_candidates.pop();
+                std::pair<dist_t, tableint> rez;
+                top_candidates.try_pop(rez);
             }
             while (top_candidates.size() > 0)
             {
-                std::pair<dist_t, tableint> rez = top_candidates.top();
+                std::pair<dist_t, tableint> rez;
+                top_candidates.try_pop(rez);
                 result.push(std::pair<dist_t, labeltype>(rez.first, rez.second));
-                top_candidates.pop();
             }
             return result;
         }
