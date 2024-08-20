@@ -387,7 +387,6 @@ namespace hnswlib
 
         inline dist_t distance(const void *data, tableint id2, dist_t *v) const
         {
-            dist_t dist = INT64_MAX;
             auto &list2 = super_node_list_.at(id2)->contain_points_list;
 
             size_t qty = *((size_t *) dist_func_param_);
@@ -435,11 +434,9 @@ namespace hnswlib
                     _mm256_store_ps(TmpRes, regs[k]);
                     v[j + k] = TmpRes[0] + TmpRes[1] + TmpRes[2] + TmpRes[3] + TmpRes[4] + TmpRes[5] +
                                TmpRes[6] + TmpRes[7];
-                    dist = std::min(dist, v[j + k]);
                 }
             }
-
-            return dist;
+            return *std::min_element(v, v + list2.size());
         }
 
 
@@ -1822,7 +1819,7 @@ namespace hnswlib
                         tableint cand = datal[i];
                         if (cand < 0 || cand > max_elements_)
                             throw std::runtime_error("cand error");
-                        dist_t d = distance(query_data, cand);
+                        dist_t d = distance(query_data, cand, this->tmp_dist);
                         if (d < curdist)
                         {
                             curdist = d;
