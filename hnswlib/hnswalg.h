@@ -14,6 +14,7 @@
 #include <set>
 #include <tbb/concurrent_priority_queue.h>
 #include <tbb/parallel_for.h>
+#include <omp.h>
 
 namespace hnswlib
 {
@@ -514,12 +515,16 @@ namespace hnswlib
             if (bare_bone_search ||
                 (!isMarkedDeleted(ep_id) && ((!isIdAllowed) || (*isIdAllowed)(getExternalLabel(ep_id)))))
             {
-                for (auto &cand: this->super_node_list_.at(ep_id)->contain_points_list)
+#pragma omp parallel  // 明确标记并行区块开始
                 {
-                    char *ep_data = getDataByInternalId(cand);
-                    dist_t dist = fstdistfunc_(data_point, ep_data, dist_func_param_);
-                    lowerBound = std::min(lowerBound, dist);
-                    top_candidates.emplace(dist, cand);
+#pragma omp for reduction(min: lowerBound)
+                    for (auto &cand: this->super_node_list_.at(ep_id)->contain_points_list)
+                    {
+                        char *ep_data = getDataByInternalId(cand);
+                        dist_t dist = fstdistfunc_(data_point, ep_data, dist_func_param_);
+                        top_candidates.emplace(dist, cand);
+                        lowerBound = std::min(lowerBound, dist);
+                    }
                 }
                 if (!bare_bone_search && stop_condition)
                 {
@@ -617,14 +622,18 @@ namespace hnswlib
                                 (!isMarkedDeleted(candidate_id) &&
                                  ((!isIdAllowed) || (*isIdAllowed)(getExternalLabel(candidate_id)))))
                             {
-                                for (auto &cand: this->super_node_list_.at(candidate_id)->contain_points_list)
+#pragma omp parallel  // 明确标记并行区块开始
                                 {
-                                    dist_t tmp_dist = fstdistfunc_(data_point, getDataByInternalId(cand),
-                                                                   dist_func_param_);
-                                    if (top_candidates.size() < ef || lowerBound > tmp_dist)
+#pragma omp for reduction(min: dist)
+                                    for (auto &cand: this->super_node_list_.at(candidate_id)->contain_points_list)
                                     {
-                                        top_candidates.emplace(tmp_dist, cand);
-                                        dist = std::min(dist, tmp_dist);
+                                        dist_t tmp_dist = fstdistfunc_(data_point, getDataByInternalId(cand),
+                                                                       dist_func_param_);
+                                        if (top_candidates.size() < ef || lowerBound > tmp_dist)
+                                        {
+                                            top_candidates.emplace(tmp_dist, cand);
+                                            dist = std::min(dist, tmp_dist);
+                                        }
                                     }
                                 }
                                 // if (top_candidates.size() < ef || lowerBound > dist)
