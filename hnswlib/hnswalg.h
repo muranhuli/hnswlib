@@ -75,9 +75,12 @@ namespace hnswlib
         std::mutex deleted_elements_lock;  // lock for deleted_elements
         std::unordered_set<tableint> deleted_elements;  // contains internal ids of deleted elements
 
+        dist_t* radiu_dist;
+
         struct SuperNode
         {
             tableint id;
+            // 超点中心点
             std::vector<float> center_point;
             std::vector<std::pair<tableint, std::vector<dist_t>>> contain_points_list;
             dist_t radius;
@@ -137,6 +140,7 @@ namespace hnswlib
                     max_dis = std::max(max_dis, dis);
                 }
                 radius = max_dis;
+                parent->radiu_dist[id] = max_dis;
             }
         };
 
@@ -147,7 +151,10 @@ namespace hnswlib
         float disThreshold{0};
         size_t max_nodes_in_supernode{0};
         // 用于查询中，暂存最短距离的数组
-        dist_t *tmp_dist;
+        dist_t *node_dist;
+        dist_t *center_node_dist;
+        mutable int num1{0};
+        mutable int num2{0};
 
 
         HierarchicalNSW(SpaceInterface<dist_t> *s)
@@ -233,7 +240,9 @@ namespace hnswlib
 
             // 自定义数据
             node_to_super_node_.resize(max_elements_, 0);
-            tmp_dist = new dist_t[max_elements_];
+            radiu_dist = new dist_t[max_elements_];
+            node_dist = new dist_t[max_nodes_in_supernode];
+            center_node_dist = new dist_t[maxM0_];
         }
 
 
@@ -268,6 +277,58 @@ namespace hnswlib
                 sum_edge += size;
             }
             std::cout << "The size of edge is " << sum_edge << std::endl;
+        }
+
+        // 计算超点中心点之间的距离
+        inline void distance(const void *data, tableint *superNodedata, int size, dist_t *v) const
+        {
+            size_t qty = *((size_t *) dist_func_param_);
+            size_t qty16 = qty >> 4;
+            __m256 diff, v1, v2;
+            __m256 regs[13];
+            std::vector<float *> pVects(13, nullptr);
+            for (size_t j = 0; j < size; j = j + 13)
+            {
+                size_t len = std::min(size - j, static_cast<size_t>(13));
+                float *pVect = (float *) data;
+                const float *pEnd = pVect + (qty16 << 4);
+                for (size_t k = 0; k < len; ++k)
+                {
+                    pVects[k] = super_node_list_.at(superNodedata[j+k])->center_point.data();
+                }
+                for (auto &reg: regs)
+                {
+                    reg = _mm256_set1_ps(0.0f);
+                }
+                while (pVect < pEnd)
+                {
+                    v1 = _mm256_loadu_ps(pVect);
+                    for (size_t k = 0; k < len; ++k)
+                    {
+                        v2 = _mm256_loadu_ps(pVects[k]);
+                        pVects[k] += 8;
+                        diff = _mm256_sub_ps(v1, v2);
+                        regs[k] = _mm256_add_ps(regs[k], _mm256_mul_ps(diff, diff));
+                    }
+                    pVect += 8;
+                    v1 = _mm256_loadu_ps(pVect);
+                    for (size_t k = 0; k < len; ++k)
+                    {
+                        v2 = _mm256_loadu_ps(pVects[k]);
+                        pVects[k] += 8;
+                        diff = _mm256_sub_ps(v1, v2);
+                        regs[k] = _mm256_add_ps(regs[k], _mm256_mul_ps(diff, diff));
+                    }
+                    pVect += 8;
+                }
+                for (size_t k = 0; k < len; ++k)
+                {
+                    float PORTABLE_ALIGN32 TmpRes[8];
+                    _mm256_store_ps(TmpRes, regs[k]);
+                    v[j + k] = TmpRes[0] + TmpRes[1] + TmpRes[2] + TmpRes[3] + TmpRes[4] + TmpRes[5] +
+                               TmpRes[6] + TmpRes[7];
+                }
+            }
         }
 
         inline dist_t distance(tableint id1, tableint id2) const
@@ -633,10 +694,10 @@ namespace hnswlib
             if (bare_bone_search ||
                 (!isMarkedDeleted(ep_id) && ((!isIdAllowed) || (*isIdAllowed)(getExternalLabel(ep_id)))))
             {
-                lowerBound = distance(data_point, ep_id, this->tmp_dist);
+                lowerBound = distance(data_point, ep_id, this->node_dist);
                 for (size_t i = 0; i < this->super_node_list_.at(ep_id)->contain_points_list.size(); i++)
                 {
-                    top_candidates.emplace(tmp_dist[i], this->super_node_list_.at(ep_id)->contain_points_list[i].first);
+                    top_candidates.emplace(node_dist[i], this->super_node_list_.at(ep_id)->contain_points_list[i].first);
                 }
 
                 if (!bare_bone_search && stop_condition)
@@ -698,20 +759,29 @@ namespace hnswlib
                 _mm_prefetch((data + 2), _MM_HINT_T0);
 #endif
 
-                for (size_t j = 1; j <= size; j++)
+                auto *datal = (tableint *) (data + 1);
+                distance(data_point, datal, size, this->center_node_dist);
+
+                for (size_t j = 0; j < size; j++)
                 {
-                    int candidate_id = *(data + j);
+                    int candidate_id = *(datal + j);
 //                    if (candidate_id == 0) continue;
 #ifdef USE_SSE
-                    _mm_prefetch((visited_array + *(data + j + 1)), _MM_HINT_T0);
+                    _mm_prefetch((visited_array + *(datal + j + 1)), _MM_HINT_T0);
                     _mm_prefetch(
-                            (void *) (data_level0_memory_ + (*(data + j + 1)) * size_data_per_element_ + offsetData_),
+                            (void *) (data_level0_memory_ + (*(datal + j + 1)) * size_data_per_element_ + offsetData_),
                             _MM_HINT_T0);  ////////////
 #endif
                     if (!(visited_array[candidate_id] == visited_array_tag))
                     {
                         visited_array[candidate_id] = visited_array_tag;
-                        dist_t dist = distance(data_point, candidate_id, this->tmp_dist);
+                        dist_t dist = center_node_dist[j] - radiu_dist[candidate_id];
+                        if (top_candidates.size() < ef || lowerBound > dist)
+                        {
+                            dist = distance(data_point, candidate_id, this->node_dist);
+                        }
+                        else
+                            continue;
 
                         bool flag_consider_candidate;
                         if (!bare_bone_search && stop_condition)
@@ -725,6 +795,7 @@ namespace hnswlib
 
                         if (flag_consider_candidate)
                         {
+                            num2++;
 #ifdef USE_SSE
                             _mm_prefetch((void *) (data_level0_memory_ +
                                                    candidate_set.top().second * size_data_per_element_ +
@@ -737,9 +808,9 @@ namespace hnswlib
                             {
                                 for (size_t i = 0; i < this->super_node_list_.at(candidate_id)->contain_points_list.size(); i++)
                                 {
-                                    if (top_candidates.size() < ef || lowerBound > tmp_dist[i])
+                                    if (top_candidates.size() < ef || lowerBound > node_dist[i])
                                     {
-                                        top_candidates.emplace(tmp_dist[i], this->super_node_list_.at(candidate_id)->contain_points_list[i].first);
+                                        top_candidates.emplace(node_dist[i], this->super_node_list_.at(candidate_id)->contain_points_list[i].first);
                                     }
                                 }
                                 candidate_set.emplace(-dist, candidate_id);
@@ -776,6 +847,10 @@ namespace hnswlib
 
                             if (!top_candidates.empty())
                                 lowerBound = top_candidates.top().first;
+                        }
+                        else
+                        {
+                            num1++;
                         }
                     }
                 }
@@ -1814,12 +1889,17 @@ namespace hnswlib
                     metric_distance_computations += size;
 
                     auto *datal = (tableint *) (data + 1);
+                    // 用于剪枝裁剪
+                    distance(query_data, datal, size, center_node_dist);
                     for (int i = 0; i < size; i++)
                     {
+                        // 剪枝裁剪
+                        if (center_node_dist[i]-radiu_dist[i]>curdist)
+                            continue;
                         tableint cand = datal[i];
                         if (cand < 0 || cand > max_elements_)
                             throw std::runtime_error("cand error");
-                        dist_t d = distance(query_data, cand, this->tmp_dist);
+                        dist_t d = distance(query_data, cand, this->node_dist);
                         if (d < curdist)
                         {
                             curdist = d;
