@@ -137,38 +137,5 @@ private:
     CounterSingleton& operator=(const CounterSingleton&) = delete;
 };
 
-#include <vector>
-#include <random>
-#include <iostream>
-
-// 方法：https://blog.csdn.net/coffee_cream/article/details/109146143
-class LSH
-{
-private:
-    std::vector<float> r;
-    float b;
-    double w;
-    size_t dimension;
-    std::default_random_engine generator;
-    std::normal_distribution<double> distribution;
-public:
-    LSH(size_t dim, double width, unsigned seed = 42) : dimension(dim), w(width), distribution(0.0, 1.0), generator(seed) {
-        // 初始化随机向量r
-        for (int i = 0; i < dimension; ++i) {
-            r.push_back(distribution(generator));
-        }
-        // 随机选择偏移量b，范围在0到w之间
-        b = (distribution(generator) * w) / 2.0;
-    }
-    int hash(const void *v)
-    {
-        double dotProduct = 0.0;
-        for (int i = 0; i < dimension; ++i) {
-            dotProduct += r[i] * ((float *)v)[i];
-        }
-        return (int)((dotProduct + b) / w);
-    }
-};
-
 
 #endif //HNSWLIB_UTILS_H
