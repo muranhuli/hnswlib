@@ -137,4 +137,5 @@ private:
     CounterSingleton& operator=(const CounterSingleton&) = delete;
 };
 
+
 #endif //HNSWLIB_UTILS_H

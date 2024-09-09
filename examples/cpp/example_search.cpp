@@ -3,14 +3,13 @@
 #include <set>
 #include "../../hnswlib/utils.h"
 
-
 int main()
 {
     int M = 64;                 // Tightly connected with internal dimensionality of the data
     int ef_construction = 200;  // Controls index search speed/build speed tradeoff
     float disThreshold = 2e+06;
     size_t maxNum = 50;
-    std::string filename = "/media/disk7T/liuyu/hdf5/fashion-mnist-784-euclidean.hdf5";
+    std::string filename = "/data/liuyu/hdf5/fashion-mnist-784-euclidean.hdf5";
 
     hsize_t dims_out[2];
     auto data = DataRead::read_hdf5_float(filename, "/train",
@@ -18,21 +17,22 @@ int main()
     int dim = int(dims_out[1]);
     int max_elements = int(dims_out[0]);
 
-    std::cout<<"dim="<<dim<<" max_elements="<<max_elements<<" M="<<M<<" ef_construction="<<ef_construction<<std::endl;
-    std::cout<<"disThreshold="<<disThreshold<<" maxNum="<<maxNum<<std::endl;
+    std::cout << "dim=" << dim << " max_elements=" << max_elements << " M=" << M << " ef_construction="
+              << ef_construction << std::endl;
+    std::cout << "disThreshold=" << disThreshold << " maxNum=" << maxNum << std::endl;
 
     // Initing index
     hnswlib::L2Space space(dim);
     auto *alg_hnsw = new hnswlib::HierarchicalNSW<float>(&space, max_elements, disThreshold,
                                                          maxNum, M,
-                                                         ef_construction, 100,true);
+                                                         ef_construction, 100, true);
 
     // Add data to index
     {
         Time time("Build Index");
         for (int i = 0; i < max_elements; i++)
         {
-            schedule("AddPoint",i,max_elements);
+            schedule("AddPoint", i, max_elements);
             std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(data.get() + i * dim, 20);
             std::set<int> result_label;
             while (!result.empty())
@@ -62,13 +62,15 @@ int main()
     // Query the elements for themselves and measure recall
     alg_hnsw->ef_construction_ = 400;
     alg_hnsw->ef_ = 400;
+    alg_hnsw->num1 = 0;
+    alg_hnsw->num2 = 0;
     float correct = 0;
     {
         Time time("KNN Search");
         std::ofstream fout("calculDisNum.txt");
         for (int i = 0; i < test_max_elements; i++)
         {
-            schedule("ANN",i,test_max_elements);
+            schedule("ANN", i, test_max_elements);
             int k = 10;
             CounterSingleton::getInstance().clear();
             std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(
@@ -97,6 +99,7 @@ int main()
     }
     float recall = correct / test_max_elements;
     std::cout << "Recall: " << recall << "\n";
+    std::cout<<"Num: "<<alg_hnsw->num2<<"/"<<alg_hnsw->num1<<std::endl;
 
     // Serialize index
     // std::string hnsw_path = "hnsw.bin";
