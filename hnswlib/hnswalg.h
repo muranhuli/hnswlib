@@ -277,13 +277,13 @@ namespace hnswlib
         }
 
         // 计算超点中心点之间的距离
-        inline int distance(const void* data, tableint* superNodedata, int size, dist_t* v) const
+        inline void distance(const void* data, tableint* superNodedata, int size, dist_t* v) const
         {
             size_t qty = *((size_t*)dist_func_param_);
             size_t qty16 = qty >> 4;
             __m256 diff, v1, v2;
             __m256 regs[13];
-            int min_index = -1;
+            // int min_index = -1;
             std::vector<float*> pVects(13, nullptr);
             for (size_t j = 0; j < size; j = j + 13)
             {
@@ -326,13 +326,12 @@ namespace hnswlib
                     v[j + k] = TmpRes[0] + TmpRes[1] + TmpRes[2] + TmpRes[3] + TmpRes[4] + TmpRes[5] +
                         TmpRes[6] + TmpRes[7];
                     v[j + k] -= super_node_list_.at(superNodedata[j + k])->radius;
-                    if (min_index == -1 || v[j + k] < v[min_index])
-                    {
-                        min_index = j + k;
-                    }
+                    // if (min_index == -1 || v[j + k] < v[min_index])
+                    // {
+                    //     min_index = j + k;
+                    // }
                 }
             }
-            return min_index;
         }
 
         inline dist_t distance(tableint id1, tableint id2) const
@@ -769,21 +768,17 @@ namespace hnswlib
 #endif
 
                 auto* datal = (tableint*)(data + 1);
-                int min_index = distance(data_point, datal, size, this->center_node_dist);
-
-                for (int j = -1; j < int(size); j++)
+                distance(data_point, datal, size, this->center_node_dist);
+                std::vector<int> indices(size);
+                std::iota(indices.begin(), indices.end(), 0);
+                std::sort(indices.begin(), indices.end(), [&](int i, int j)
                 {
-                    int candidate_id;
-                    if (j == -1)
-                    {
-                        if (min_index == -1)
-                        {
-                            continue;
-                        }
-                        candidate_id = *(datal + min_index);
-                    }
-                    else
-                        candidate_id = *(datal + j);
+                    return center_node_dist[i] < center_node_dist[j];
+                });
+
+                for (auto& j : indices)
+                {
+                    int candidate_id = *(datal + j);
                     //                    if (candidate_id == 0) continue;
 #ifdef USE_SSE
                     _mm_prefetch((visited_array + *(datal + j + 1)), _MM_HINT_T0);
@@ -1919,23 +1914,16 @@ namespace hnswlib
 
                     auto* datal = (tableint*)(data + 1);
                     // 用于剪枝裁剪
-                    int min_index = distance(query_data, datal, size, center_node_dist);
-                    // 首先处理理论上最短的
-                    if (min_index != -1)
+                    distance(query_data, datal, size, center_node_dist);
+                    std::vector<int> indices(size);
+                    std::iota(indices.begin(), indices.end(), 0);
+                    std::sort(indices.begin(), indices.end(), [&](int i, int j)
                     {
-                        tableint cand = datal[min_index];
-                        dist_t d = distance(query_data, cand, this->node_dist);
-                        if (d < curdist)
-                        {
-                            curdist = d;
-                            currObj = cand;
-                            changed = true;
-                        }
-                    }
-                    for (int i = 0; i < size; i++)
+                        return center_node_dist[i] < center_node_dist[j];
+                    });
+
+                    for (auto& i : indices)
                     {
-                        if (i == min_index)
-                            continue;
                         tableint cand = datal[i];
                         // 剪枝裁剪
                         if (cand < 0 || cand > max_elements_)
