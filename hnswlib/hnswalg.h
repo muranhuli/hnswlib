@@ -782,6 +782,7 @@ namespace hnswlib
                             num1++;
                             continue;
                         }
+                        num2++;
 
                         bool flag_consider_candidate;
                         if (!bare_bone_search && stop_condition)
@@ -795,7 +796,6 @@ namespace hnswlib
 
                         if (flag_consider_candidate)
                         {
-                            num2++;
 #ifdef USE_SSE
                             _mm_prefetch((void *) (data_level0_memory_ +
                                                    candidate_set.top().second * size_data_per_element_ +

@@ -99,8 +99,9 @@ int main()
     }
     float recall = correct / test_max_elements;
     std::cout << "Recall: " << recall << "\n";
-    std::cout<<"Num: "<<alg_hnsw->num2<<"/"<<alg_hnsw->num1<<std::endl;
-
+    // std::cout<<"Num: "<<alg_hnsw->num2<<"/"<<alg_hnsw->num1<<std::endl;
+    std::cout<<"Pruning Num: "<<alg_hnsw->num1<<std::endl;
+    std::cout<<"Computing Num: "<<alg_hnsw->num2<<std::endl;
     // Serialize index
     // std::string hnsw_path = "hnsw.bin";
     // alg_hnsw->saveIndex(hnsw_path);
