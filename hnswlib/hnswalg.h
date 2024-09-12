@@ -86,9 +86,6 @@ namespace hnswlib
             dist_t radius;
             HierarchicalNSW<dist_t> *parent;
 
-            SuperNode() : parent(nullptr)
-            {}
-
             SuperNode(tableint id_, HierarchicalNSW<dist_t> *parent)
             {
                 this->id = id_;
@@ -157,7 +154,7 @@ namespace hnswlib
         mutable int num2{0};
 
 
-        HierarchicalNSW(SpaceInterface<dist_t> *s)
+        explicit HierarchicalNSW(SpaceInterface<dist_t> *s)
         {
         }
 
@@ -266,7 +263,7 @@ namespace hnswlib
             visited_list_pool_.reset(nullptr);
         }
 
-        void hnsw_graph_info_stats()
+        void hnsw_graph_info_stats() const
         {
             std::cout << "The size of superNode is " << cur_super_node_count << std::endl;
             size_t sum_edge = 0;
@@ -290,7 +287,7 @@ namespace hnswlib
             for (size_t j = 0; j < size; j = j + 13)
             {
                 size_t len = std::min(size - j, static_cast<size_t>(13));
-                float *pVect = (float *) data;
+                auto *pVect = (float *) data;
                 const float *pEnd = pVect + (qty16 << 4);
                 for (size_t k = 0; k < len; ++k)
                 {
@@ -451,7 +448,6 @@ namespace hnswlib
             auto &list2 = super_node_list_.at(id2)->contain_points_list;
 
             size_t qty = *((size_t *) dist_func_param_);
-            float PORTABLE_ALIGN32 TmpRes[8];
             size_t qty16 = qty >> 4;
             __m256 diff, v1, v2;
             __m256 regs[13];
@@ -459,7 +455,7 @@ namespace hnswlib
             for (size_t j = 0; j < list2.size(); j = j + 13)
             {
                 size_t len = std::min(list2.size() - j, static_cast<size_t>(13));
-                float *pVect = (float *) data;
+                auto *pVect = (float *) data;
                 const float *pEnd = pVect + (qty16 << 4);
                 for (size_t k = 0; k < len; ++k)
                 {
@@ -492,6 +488,7 @@ namespace hnswlib
                 }
                 for (size_t k = 0; k < len; ++k)
                 {
+                    float PORTABLE_ALIGN32 TmpRes[8];
                     _mm256_store_ps(TmpRes, regs[k]);
                     v[j + k] = TmpRes[0] + TmpRes[1] + TmpRes[2] + TmpRes[3] + TmpRes[4] + TmpRes[5] +
                                TmpRes[6] + TmpRes[7];
