@@ -775,16 +775,13 @@ namespace hnswlib
                     if (!(visited_array[candidate_id] == visited_array_tag))
                     {
                         visited_array[candidate_id] = visited_array_tag;
-                        dist_t dist = center_node_dist[j] - super_node_list_.at(candidate_id)->radius;
+                        dist_t dist = center_node_dist[j] - radiu_dist[candidate_id];
                         if (top_candidates.size() < ef || lowerBound > dist)
                         {
                             dist = distance(data_point, candidate_id, this->node_dist);
                         }
                         else
-                        {
-                            num1++;
                             continue;
-                        }
 
                         bool flag_consider_candidate;
                         if (!bare_bone_search && stop_condition)
@@ -850,6 +847,10 @@ namespace hnswlib
 
                             if (!top_candidates.empty())
                                 lowerBound = top_candidates.top().first;
+                        }
+                        else
+                        {
+                            num1++;
                         }
                     }
                 }
@@ -1892,16 +1893,13 @@ namespace hnswlib
                     distance(query_data, datal, size, center_node_dist);
                     for (int i = 0; i < size; i++)
                     {
-                        tableint cand = datal[i];
                         // 剪枝裁剪
+                        if (center_node_dist[i]-radiu_dist[i]>curdist)
+                            continue;
+                        tableint cand = datal[i];
                         if (cand < 0 || cand > max_elements_)
                             throw std::runtime_error("cand error");
-                        dist_t d = center_node_dist[i] - super_node_list_.at(cand)->radius;
-                        if (d < curdist)
-                            d = distance(query_data, cand, this->node_dist);
-                        else
-                            continue;
-
+                        dist_t d = distance(query_data, cand, this->node_dist);
                         if (d < curdist)
                         {
                             curdist = d;
