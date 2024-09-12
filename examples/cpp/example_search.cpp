@@ -5,8 +5,8 @@
 
 int main()
 {
-    int M = 64; // Tightly connected with internal dimensionality of the data
-    int ef_construction = 200; // Controls index search speed/build speed tradeoff
+    int M = 64;                 // Tightly connected with internal dimensionality of the data
+    int ef_construction = 200;  // Controls index search speed/build speed tradeoff
     float disThreshold = 2e+06;
     size_t maxNum = 50;
     std::string filename = "/data/liuyu/hdf5/fashion-mnist-784-euclidean.hdf5";
@@ -18,12 +18,12 @@ int main()
     int max_elements = int(dims_out[0]);
 
     std::cout << "dim=" << dim << " max_elements=" << max_elements << " M=" << M << " ef_construction="
-        << ef_construction << std::endl;
+              << ef_construction << std::endl;
     std::cout << "disThreshold=" << disThreshold << " maxNum=" << maxNum << std::endl;
 
     // Initing index
     hnswlib::L2Space space(dim);
-    auto* alg_hnsw = new hnswlib::HierarchicalNSW<float>(&space, max_elements, disThreshold,
+    auto *alg_hnsw = new hnswlib::HierarchicalNSW<float>(&space, max_elements, disThreshold,
                                                          maxNum, M,
                                                          ef_construction, 100, true);
 
@@ -33,8 +33,7 @@ int main()
         for (int i = 0; i < max_elements; i++)
         {
             schedule("AddPoint", i, max_elements);
-            std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(
-                data.get() + i * dim, 20);
+            std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(data.get() + i * dim, 20);
             std::set<int> result_label;
             while (!result.empty())
             {
@@ -75,7 +74,7 @@ int main()
             int k = 10;
             CounterSingleton::getInstance().clear();
             std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(
-                test_data.get() + i * dim, k);
+                    test_data.get() + i * dim, k);
             //  result提取出来，用于计算recall
             std::set<int> result_label;
             while (!result.empty())
@@ -100,10 +99,7 @@ int main()
     }
     float recall = correct / test_max_elements;
     std::cout << "Recall: " << recall << "\n";
-    std::cout << "Pruning Num: " << alg_hnsw->num1 << std::endl;
-    std::cout << "Computing Num: " << alg_hnsw->num2 << std::endl;
-    // std::cout<<"Num: "<<alg_hnsw->num2<<"/"<<alg_hnsw->num1<<std::endl;
-
+    std::cout<<"Num: "<<alg_hnsw->num2<<"/"<<alg_hnsw->num1<<std::endl;
 
     // Serialize index
     // std::string hnsw_path = "hnsw.bin";
