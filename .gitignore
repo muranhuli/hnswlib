@@ -13,3 +13,4 @@ var/
 *.pyc
 cmake-build-debug
 cmake-build-release
+logs
