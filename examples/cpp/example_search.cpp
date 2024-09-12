@@ -32,7 +32,7 @@ int main()
         Time time("Build Index");
         for (int i = 0; i < max_elements; i++)
         {
-            schedule("AddPoint", i, max_elements);
+            // schedule("AddPoint", i, max_elements);
             std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(
                 data.get() + i * dim, 20);
             std::set<int> result_label;
