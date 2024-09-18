@@ -60,8 +60,8 @@ int main()
     int neighbor_dim = int(dims_out[1]);
 
     // Query the elements for themselves and measure recall
-    alg_hnsw->ef_construction_ = 400;
-    alg_hnsw->ef_ = 400;
+    alg_hnsw->ef_construction_ = 100;
+    alg_hnsw->ef_ = 100;
     alg_hnsw->num1 = 0;
     alg_hnsw->num2 = 0;
     float correct = 0;
