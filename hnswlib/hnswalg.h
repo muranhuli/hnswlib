@@ -75,7 +75,7 @@ namespace hnswlib
         std::mutex deleted_elements_lock;  // lock for deleted_elements
         std::unordered_set<tableint> deleted_elements;  // contains internal ids of deleted elements
 
-        dist_t* radiu_dist;
+        dist_t *radiu_dist;
 
         struct SuperNode
         {
@@ -195,8 +195,7 @@ namespace hnswlib
             if (M <= 10000)
             {
                 M_ = M;
-            }
-            else
+            } else
             {
                 HNSWERR << "warning: M parameter exceeds 10000 which may lead to adverse effects." << std::endl;
                 HNSWERR << "         Cap to 10000 will be applied for the rest of the processing." << std::endl;
@@ -292,7 +291,7 @@ namespace hnswlib
                 const float *pEnd = pVect + (qty16 << 4);
                 for (size_t k = 0; k < len; ++k)
                 {
-                    pVects[k] = super_node_list_.at(superNodedata[j+k])->center_point.data();
+                    pVects[k] = super_node_list_.at(superNodedata[j + k])->center_point.data();
                 }
                 for (auto &reg: regs)
                 {
@@ -325,7 +324,7 @@ namespace hnswlib
                     _mm512_store_ps(TmpRes, regs[k]);
                     v[j + k] = TmpRes[0] + TmpRes[1] + TmpRes[2] + TmpRes[3] + TmpRes[4] + TmpRes[5] +
                                TmpRes[6] + TmpRes[7] + TmpRes[8] + TmpRes[9] + TmpRes[10] + TmpRes[11] +
-                                   TmpRes[12] + TmpRes[13] + TmpRes[14] + TmpRes[15];
+                               TmpRes[12] + TmpRes[13] + TmpRes[14] + TmpRes[15];
                 }
             }
         }
@@ -341,7 +340,7 @@ namespace hnswlib
             size_t qty16 = qty >> 4;
             __m512 diff, v1, v2;
             __m512 regs[reg_num];
-            std::vector<float*> pVects(reg_num, nullptr);
+            std::vector<float *> pVects(reg_num, nullptr);
             for (size_t i = 0; i < list1.size(); ++i)
             {
                 for (size_t j = 0; j < list2.size(); j = j + reg_num)
@@ -384,7 +383,7 @@ namespace hnswlib
                         _mm512_store_ps(TmpRes, regs[k]);
                         dist = std::min(dist, TmpRes[0] + TmpRes[1] + TmpRes[2] + TmpRes[3] + TmpRes[4] + TmpRes[5] +
                                               TmpRes[6] + TmpRes[7] + TmpRes[8] + TmpRes[9] + TmpRes[10] + TmpRes[11] +
-                                                  TmpRes[12] + TmpRes[13] + TmpRes[14] + TmpRes[15]);
+                                              TmpRes[12] + TmpRes[13] + TmpRes[14] + TmpRes[15]);
                     }
                 }
             }
@@ -442,7 +441,7 @@ namespace hnswlib
                     _mm512_store_ps(TmpRes, regs[k]);
                     dist = std::min(dist, TmpRes[0] + TmpRes[1] + TmpRes[2] + TmpRes[3] + TmpRes[4] + TmpRes[5] +
                                           TmpRes[6] + TmpRes[7] + TmpRes[8] + TmpRes[9] + TmpRes[10] + TmpRes[11] +
-                                              TmpRes[12] + TmpRes[13] + TmpRes[14] + TmpRes[15]);
+                                          TmpRes[12] + TmpRes[13] + TmpRes[14] + TmpRes[15]);
                 }
             }
 
@@ -499,7 +498,7 @@ namespace hnswlib
                     _mm512_store_ps(TmpRes, regs[k]);
                     v[j + k] = TmpRes[0] + TmpRes[1] + TmpRes[2] + TmpRes[3] + TmpRes[4] + TmpRes[5] +
                                TmpRes[6] + TmpRes[7] + TmpRes[8] + TmpRes[9] + TmpRes[10] + TmpRes[11] +
-                                   TmpRes[12] + TmpRes[13] + TmpRes[14] + TmpRes[15];
+                               TmpRes[12] + TmpRes[13] + TmpRes[14] + TmpRes[15];
                 }
             }
             return *std::min_element(v, v + list2.size());
@@ -600,8 +599,7 @@ namespace hnswlib
                 top_candidates.emplace(dist, ep_id);
                 lowerBound = dist;
                 candidateSet.emplace(-dist, ep_id);
-            }
-            else
+            } else
             {
                 lowerBound = std::numeric_limits<dist_t>::max();
                 candidateSet.emplace(-lowerBound, ep_id);
@@ -625,8 +623,7 @@ namespace hnswlib
                 if (layer == 0)
                 {
                     data = (int *) get_linklist0(curNodeNum);
-                }
-                else
+                } else
                 {
                     data = (int *) get_linklist(curNodeNum, layer);
 //                    data = (int *) (linkLists_[curNodeNum] + (layer - 1) * size_links_per_element_);
@@ -699,7 +696,9 @@ namespace hnswlib
             if (bare_bone_search ||
                 (!isMarkedDeleted(ep_id) && ((!isIdAllowed) || (*isIdAllowed)(getExternalLabel(ep_id)))))
             {
-                lowerBound = distance(data_point, ep_id, this->node_dist);
+                // lowerBound = distance(data_point, ep_id, this->node_dist);
+                lowerBound = fstdistfunc_(data_point, super_node_list_.at(ep_id)->center_point.data(),
+                                          dist_func_param_);
                 top_candidates.emplace(lowerBound, ep_id);
                 // for (size_t i = 0; i < this->super_node_list_.at(ep_id)->contain_points_list.size(); i++)
                 // {
@@ -711,8 +710,7 @@ namespace hnswlib
                 //     // stop_condition->add_point_to_result(getExternalLabel(ep_id), ep_data, dist);
                 // }
                 candidate_set.emplace(-lowerBound, ep_id);
-            }
-            else
+            } else
             {
                 lowerBound = std::numeric_limits<dist_t>::max();
                 candidate_set.emplace(-lowerBound, ep_id);
@@ -729,14 +727,12 @@ namespace hnswlib
                 if (bare_bone_search)
                 {
                     flag_stop_search = candidate_dist > lowerBound;
-                }
-                else
+                } else
                 {
                     if (stop_condition)
                     {
                         flag_stop_search = stop_condition->should_stop_search(candidate_dist, lowerBound);
-                    }
-                    else
+                    } else
                     {
                         flag_stop_search = candidate_dist > lowerBound && top_candidates.size() == ef;
                     }
@@ -798,8 +794,7 @@ namespace hnswlib
                         if (!bare_bone_search && stop_condition)
                         {
                             flag_consider_candidate = stop_condition->should_consider_candidate(dist, lowerBound);
-                        }
-                        else
+                        } else
                         {
                             flag_consider_candidate = top_candidates.size() < ef || lowerBound > dist;
                         }
@@ -835,8 +830,7 @@ namespace hnswlib
                             if (!bare_bone_search && stop_condition)
                             {
                                 flag_remove_extra = stop_condition->should_remove_extra();
-                            }
-                            else
+                            } else
                             {
                                 flag_remove_extra = top_candidates.size() > ef;
                             }
@@ -849,8 +843,7 @@ namespace hnswlib
                                     stop_condition->remove_point_from_result(getExternalLabel(id),
                                                                              getDataByInternalId(id), dist);
                                     flag_remove_extra = stop_condition->should_remove_extra();
-                                }
-                                else
+                                } else
                                 {
                                     flag_remove_extra = top_candidates.size() > ef;
                                 }
@@ -1038,8 +1031,7 @@ namespace hnswlib
                     {
                         data[sz_link_list_other] = cur_c;
                         setListCount(ll_other, sz_link_list_other + 1);
-                    }
-                    else
+                    } else
                     {
                         // finding the "weakest" element to replace it with the new one
                         // dist_t d_max = fstdistfunc_(getDataByInternalId(cur_c),
@@ -1272,8 +1264,7 @@ namespace hnswlib
                 {
                     element_levels_[i] = 0;
                     linkLists_[i] = nullptr;
-                }
-                else
+                } else
                 {
                     element_levels_[i] = linkListSize / size_links_per_element_;
                     linkLists_[i] = (char *) malloc(linkListSize);
@@ -1364,8 +1355,7 @@ namespace hnswlib
                     std::unique_lock<std::mutex> lock_deleted_elements(deleted_elements_lock);
                     deleted_elements.insert(internalId);
                 }
-            }
-            else
+            } else
             {
                 throw std::runtime_error("The requested to delete element is already deleted");
             }
@@ -1412,8 +1402,7 @@ namespace hnswlib
                     std::unique_lock<std::mutex> lock_deleted_elements(deleted_elements_lock);
                     deleted_elements.erase(internalId);
                 }
-            }
-            else
+            } else
             {
                 throw std::runtime_error("The requested to undelete element is not deleted");
             }
@@ -1518,8 +1507,7 @@ namespace hnswlib
             if (!is_vacant_place)
             {
                 addPoint(data_point, label, -1);
-            }
-            else
+            } else
             {
                 // we assume that there are no concurrent operations on deleted element
                 labeltype label_replaced = getExternalLabel(internal_id_replaced);
@@ -1596,8 +1584,7 @@ namespace hnswlib
                         if (candidates.size() < elementsToKeep)
                         {
                             candidates.emplace(dis, cand);
-                        }
-                        else
+                        } else
                         {
                             if (dis < candidates.top().first)
                             {
@@ -1855,8 +1842,7 @@ namespace hnswlib
                     }
                     currObj = mutuallyConnectNewElement(data_point, cur_superNode, top_candidates, level, false);
                 }
-            }
-            else
+            } else
             {
                 // Do nothing for the first element
                 enterpoint_node_ = 0;
@@ -1920,6 +1906,7 @@ namespace hnswlib
                 }
             }
 
+            // 最大堆，堆顶元素是最大的
             std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> superNode_candidates;
             std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates;
             bool bare_bone_search = !num_deleted_ && !isIdAllowed;
@@ -1927,28 +1914,48 @@ namespace hnswlib
             {
                 superNode_candidates = searchBaseLayerST<true>(
                         currObj, query_data, std::max(ef_construction_, k), isIdAllowed);
-            }
-            else
+            } else
             {
                 superNode_candidates = searchBaseLayerST<false>(
                         currObj, query_data, std::max(ef_construction_, k), isIdAllowed);
             }
+
+            // superNode_candidates 转成vector
+            std::vector<std::pair<dist_t, tableint>> superNode_candidates_vec(superNode_candidates.size());
+            int index = 0;
             while (!superNode_candidates.empty())
             {
                 std::pair<dist_t, tableint> rez = superNode_candidates.top();
-                tableint ep_id = rez.second;
-                distance(query_data, ep_id, this->node_dist);
-                for (size_t i = 0; i < this->super_node_list_.at(ep_id)->contain_points_list.size(); i++)
-                {
-                    top_candidates.emplace(node_dist[i], this->super_node_list_.at(ep_id)->contain_points_list[i].first);
-                }
+                // superNode_candidates_vec.push_back(rez);
+                superNode_candidates_vec[index] = rez;
+                index++;
                 superNode_candidates.pop();
             }
-
-
-            while (top_candidates.size() > k)
+            // 倒序遍历superNode_candidates_vec
+            dist_t lowerbound = INT_MAX;
+            for (int i = superNode_candidates_vec.size() - 1; i >= 0; i--)
             {
-                top_candidates.pop();
+                tableint ep_id = superNode_candidates_vec[i].second;
+                // 如果剪枝半径不够小，删除
+                if (superNode_candidates_vec[i].first - super_node_list_.at(ep_id)->radius > lowerbound)
+                {
+                    continue;
+                }
+                distance(query_data, ep_id, this->node_dist);
+                for (size_t j = 0; j < this->super_node_list_.at(ep_id)->contain_points_list.size(); j++)
+                {
+                    if (top_candidates.size() >= k && node_dist[j] > lowerbound)
+                    {
+                        continue;
+                    }
+                    top_candidates.emplace(node_dist[j],
+                                           this->super_node_list_.at(ep_id)->contain_points_list[j].first);
+                    while (top_candidates.size() > k)
+                    {
+                        top_candidates.pop();
+                    }
+                    lowerbound = top_candidates.top().first;
+                }
             }
             while (top_candidates.size() > 0)
             {

@@ -60,48 +60,54 @@ int main()
     int neighbor_dim = int(dims_out[1]);
 
     // Query the elements for themselves and measure recall
-    alg_hnsw->ef_construction_ = 10;
-    alg_hnsw->ef_ = 10;
-    alg_hnsw->num1 = 0;
-    alg_hnsw->num2 = 0;
-    float correct = 0;
+    std::vector<int> v {10, 25, 50, 100, 150, 200};
+    for (int m : v)
     {
-        Time time("KNN Search");
-        std::ofstream fout("calculDisNum.txt");
-        for (int i = 0; i < test_max_elements; i++)
+        alg_hnsw->ef_construction_ = m;
+        alg_hnsw->ef_ = m;
+        alg_hnsw->num1 = 0;
+        alg_hnsw->num2 = 0;
+        std::cout<<"===================================="<<std::endl;
+        std::cout<<"ef_construction: "<<m<<std::endl;
+        float correct = 0;
         {
-            schedule("ANN", i, test_max_elements);
-            int k = 10;
-            CounterSingleton::getInstance().clear();
-            std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(
-                    test_data.get() + i * dim, k);
-            //  result提取出来，用于计算recall
-            std::set<int> result_label;
-            while (!result.empty())
+            Time time("KNN Search");
+            std::ofstream fout("calculDisNum.txt");
+            for (int i = 0; i < test_max_elements; i++)
             {
-                result_label.insert(int(result.top().second));
-                result.pop();
+                schedule("ANN", i, test_max_elements);
+                int k = 10;
+                CounterSingleton::getInstance().clear();
+                std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(
+                        test_data.get() + i * dim, k);
+                //  result提取出来，用于计算recall
+                std::set<int> result_label;
+                while (!result.empty())
+                {
+                    result_label.insert(int(result.top().second));
+                    result.pop();
+                }
+                // 读取真实的neighbor
+                std::set<int> neighbor;
+                for (int j = 0; j < k; j++)
+                {
+                    neighbor.insert(neighbor_data[i * neighbor_dim + j]);
+                }
+                // 计算recall, 集合交集/neighbor数
+                std::set<int> intersection;
+                std::set_intersection(result_label.begin(), result_label.end(), neighbor.begin(), neighbor.end(),
+                                      std::inserter(intersection, intersection.begin()));
+                correct += static_cast<float>(intersection.size()) / static_cast<float>(neighbor.size());
+                fout << CounterSingleton::getInstance().getCount() << std::endl;
             }
-            // 读取真实的neighbor
-            std::set<int> neighbor;
-            for (int j = 0; j < k; j++)
-            {
-                neighbor.insert(neighbor_data[i * neighbor_dim + j]);
-            }
-            // 计算recall, 集合交集/neighbor数
-            std::set<int> intersection;
-            std::set_intersection(result_label.begin(), result_label.end(), neighbor.begin(), neighbor.end(),
-                                  std::inserter(intersection, intersection.begin()));
-            correct += static_cast<float>(intersection.size()) / static_cast<float>(neighbor.size());
-            fout << CounterSingleton::getInstance().getCount() << std::endl;
+            fout.close();
         }
-        fout.close();
+        float recall = correct / test_max_elements;
+        std::cout << "Recall: " << recall << "\n";
+        // std::cout<<"Num: "<<alg_hnsw->num2<<"/"<<alg_hnsw->num1<<std::endl;
+        std::cout << "Pruning Num: " << alg_hnsw->num1 << std::endl;
+        std::cout << "Computing Num: " << alg_hnsw->num2 << std::endl;
     }
-    float recall = correct / test_max_elements;
-    std::cout << "Recall: " << recall << "\n";
-    // std::cout<<"Num: "<<alg_hnsw->num2<<"/"<<alg_hnsw->num1<<std::endl;
-    std::cout<<"Pruning Num: "<<alg_hnsw->num1<<std::endl;
-    std::cout<<"Computing Num: "<<alg_hnsw->num2<<std::endl;
     // Serialize index
     // std::string hnsw_path = "hnsw.bin";
     // alg_hnsw->saveIndex(hnsw_path);
