@@ -5,11 +5,11 @@
 
 int main()
 {
-    int M = 64;                 // Tightly connected with internal dimensionality of the data
+    int M = 32;                 // Tightly connected with internal dimensionality of the data
     int ef_construction = 200;  // Controls index search speed/build speed tradeoff
     float disThreshold = 2e+06;
     size_t maxNum = 50;
-    std::string filename = "/data/liuyu/hdf5/fashion-mnist-784-euclidean.hdf5";
+    std::string filename = "/home/liuyu/data/hdf5/fashion-mnist-784-euclidean.hdf5";
 
     hsize_t dims_out[2];
     auto data = DataRead::read_hdf5_float(filename, "/train",
@@ -60,8 +60,8 @@ int main()
     int neighbor_dim = int(dims_out[1]);
 
     // Query the elements for themselves and measure recall
-    alg_hnsw->ef_construction_ = 100;
-    alg_hnsw->ef_ = 100;
+    alg_hnsw->ef_construction_ = 10;
+    alg_hnsw->ef_ = 10;
     alg_hnsw->num1 = 0;
     alg_hnsw->num2 = 0;
     float correct = 0;

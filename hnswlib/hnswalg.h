@@ -279,14 +279,15 @@ namespace hnswlib
         // 计算超点中心点之间的距离
         inline void distance(const void *data, tableint *superNodedata, int size, dist_t *v) const
         {
+            size_t reg_num = 29;
             size_t qty = *((size_t *) dist_func_param_);
             size_t qty16 = qty >> 4;
-            __m256 diff, v1, v2;
-            __m256 regs[13];
-            std::vector<float *> pVects(13, nullptr);
-            for (size_t j = 0; j < size; j = j + 13)
+            __m512 diff, v1, v2;
+            __m512 regs[reg_num];
+            std::vector<float *> pVects(reg_num, nullptr);
+            for (size_t j = 0; j < size; j = j + reg_num)
             {
-                size_t len = std::min(size - j, static_cast<size_t>(13));
+                size_t len = std::min(size - j, static_cast<size_t>(reg_num));
                 auto *pVect = (float *) data;
                 const float *pEnd = pVect + (qty16 << 4);
                 for (size_t k = 0; k < len; ++k)
@@ -295,56 +296,57 @@ namespace hnswlib
                 }
                 for (auto &reg: regs)
                 {
-                    reg = _mm256_set1_ps(0.0f);
+                    reg = _mm512_set1_ps(0.0f);
                 }
                 while (pVect < pEnd)
                 {
-                    v1 = _mm256_loadu_ps(pVect);
+                    v1 = _mm512_loadu_ps(pVect);
                     for (size_t k = 0; k < len; ++k)
                     {
-                        v2 = _mm256_loadu_ps(pVects[k]);
-                        pVects[k] += 8;
-                        diff = _mm256_sub_ps(v1, v2);
-                        regs[k] = _mm256_add_ps(regs[k], _mm256_mul_ps(diff, diff));
+                        v2 = _mm512_loadu_ps(pVects[k]);
+                        pVects[k] += 16;
+                        diff = _mm512_sub_ps(v1, v2);
+                        regs[k] = _mm512_add_ps(regs[k], _mm512_mul_ps(diff, diff));
                     }
-                    pVect += 8;
-                    v1 = _mm256_loadu_ps(pVect);
-                    for (size_t k = 0; k < len; ++k)
-                    {
-                        v2 = _mm256_loadu_ps(pVects[k]);
-                        pVects[k] += 8;
-                        diff = _mm256_sub_ps(v1, v2);
-                        regs[k] = _mm256_add_ps(regs[k], _mm256_mul_ps(diff, diff));
-                    }
-                    pVect += 8;
+                    pVect += 16;
+                    // v1 = _mm512_loadu_ps(pVect);
+                    // for (size_t k = 0; k < len; ++k)
+                    // {
+                    //     v2 = _mm512_loadu_ps(pVects[k]);
+                    //     pVects[k] += 16;
+                    //     diff = _mm512_sub_ps(v1, v2);
+                    //     regs[k] = _mm512_add_ps(regs[k], _mm512_mul_ps(diff, diff));
+                    // }
+                    // pVect += 16;
                 }
                 for (size_t k = 0; k < len; ++k)
                 {
-                    float PORTABLE_ALIGN32 TmpRes[8];
-                    _mm256_store_ps(TmpRes, regs[k]);
+                    float PORTABLE_ALIGN64 TmpRes[16];
+                    _mm512_store_ps(TmpRes, regs[k]);
                     v[j + k] = TmpRes[0] + TmpRes[1] + TmpRes[2] + TmpRes[3] + TmpRes[4] + TmpRes[5] +
-                               TmpRes[6] + TmpRes[7];
+                               TmpRes[6] + TmpRes[7] + TmpRes[8] + TmpRes[9] + TmpRes[10] + TmpRes[11] +
+                                   TmpRes[12] + TmpRes[13] + TmpRes[14] + TmpRes[15];
                 }
             }
         }
 
         inline dist_t distance(tableint id1, tableint id2) const
         {
+            size_t reg_num = 29;
             dist_t dist = INT64_MAX;
             auto &list1 = super_node_list_.at(id1)->contain_points_list;
             auto &list2 = super_node_list_.at(id2)->contain_points_list;
 
             size_t qty = *((size_t *) dist_func_param_);
-            float PORTABLE_ALIGN32 TmpRes[8];
             size_t qty16 = qty >> 4;
-            __m256 diff, v1, v2;
-            __m256 regs[13];
-            std::vector<float*> pVects(13, nullptr);
+            __m512 diff, v1, v2;
+            __m512 regs[reg_num];
+            std::vector<float*> pVects(reg_num, nullptr);
             for (size_t i = 0; i < list1.size(); ++i)
             {
-                for (size_t j = 0; j < list2.size(); j = j + 13)
+                for (size_t j = 0; j < list2.size(); j = j + reg_num)
                 {
-                    size_t len = std::min(list2.size() - j, static_cast<size_t>(13));
+                    size_t len = std::min(list2.size() - j, static_cast<size_t>(reg_num));
                     float *pVect = list1[i].second.data();
                     const float *pEnd = pVect + (qty16 << 4);
                     for (size_t k = 0; k < len; ++k)
@@ -353,34 +355,36 @@ namespace hnswlib
                     }
                     for (auto &reg: regs)
                     {
-                        reg = _mm256_set1_ps(0.0f);
+                        reg = _mm512_set1_ps(0.0f);
                     }
                     while (pVect < pEnd)
                     {
-                        v1 = _mm256_loadu_ps(pVect);
+                        v1 = _mm512_loadu_ps(pVect);
                         for (size_t k = 0; k < len; ++k)
                         {
-                            v2 = _mm256_loadu_ps(pVects[k]);
-                            pVects[k] += 8;
-                            diff = _mm256_sub_ps(v1, v2);
-                            regs[k] = _mm256_add_ps(regs[k], _mm256_mul_ps(diff, diff));
+                            v2 = _mm512_loadu_ps(pVects[k]);
+                            pVects[k] += 16;
+                            diff = _mm512_sub_ps(v1, v2);
+                            regs[k] = _mm512_add_ps(regs[k], _mm512_mul_ps(diff, diff));
                         }
-                        pVect += 8;
-                        v1 = _mm256_loadu_ps(pVect);
-                        for (size_t k = 0; k < len; ++k)
-                        {
-                            v2 = _mm256_loadu_ps(pVects[k]);
-                            pVects[k] += 8;
-                            diff = _mm256_sub_ps(v1, v2);
-                            regs[k] = _mm256_add_ps(regs[k], _mm256_mul_ps(diff, diff));
-                        }
-                        pVect += 8;
+                        pVect += 16;
+                        // v1 = _mm512_loadu_ps(pVect);
+                        // for (size_t k = 0; k < len; ++k)
+                        // {
+                        //     v2 = _mm512_loadu_ps(pVects[k]);
+                        //     pVects[k] += 16;
+                        //     diff = _mm512_sub_ps(v1, v2);
+                        //     regs[k] = _mm512_add_ps(regs[k], _mm512_mul_ps(diff, diff));
+                        // }
+                        // pVect += 16;
                     }
                     for (size_t k = 0; k < len; ++k)
                     {
-                        _mm256_store_ps(TmpRes, regs[k]);
+                        float PORTABLE_ALIGN64 TmpRes[16];
+                        _mm512_store_ps(TmpRes, regs[k]);
                         dist = std::min(dist, TmpRes[0] + TmpRes[1] + TmpRes[2] + TmpRes[3] + TmpRes[4] + TmpRes[5] +
-                                              TmpRes[6] + TmpRes[7]);
+                                              TmpRes[6] + TmpRes[7] + TmpRes[8] + TmpRes[9] + TmpRes[10] + TmpRes[11] +
+                                                  TmpRes[12] + TmpRes[13] + TmpRes[14] + TmpRes[15]);
                     }
                 }
             }
@@ -389,18 +393,18 @@ namespace hnswlib
 
         inline dist_t distance(const void *data, tableint id2) const
         {
+            size_t reg_num = 29;
             dist_t dist = INT64_MAX;
             auto &list2 = super_node_list_.at(id2)->contain_points_list;
 
             size_t qty = *((size_t *) dist_func_param_);
-            float PORTABLE_ALIGN32 TmpRes[8];
             size_t qty16 = qty >> 4;
-            __m256 diff, v1, v2;
-            __m256 regs[13];
-            std::vector<float *> pVects(13, nullptr);
+            __m512 diff, v1, v2;
+            __m512 regs[reg_num];
+            std::vector<float *> pVects(reg_num, nullptr);
             for (size_t j = 0; j < list2.size(); j = j + 13)
             {
-                size_t len = std::min(list2.size() - j, static_cast<size_t>(13));
+                size_t len = std::min(list2.size() - j, static_cast<size_t>(reg_num));
                 float *pVect = (float *) data;
                 const float *pEnd = pVect + (qty16 << 4);
                 for (size_t k = 0; k < len; ++k)
@@ -409,34 +413,36 @@ namespace hnswlib
                 }
                 for (auto &reg: regs)
                 {
-                    reg = _mm256_set1_ps(0.0f);
+                    reg = _mm512_set1_ps(0.0f);
                 }
                 while (pVect < pEnd)
                 {
-                    v1 = _mm256_loadu_ps(pVect);
+                    v1 = _mm512_loadu_ps(pVect);
                     for (size_t k = 0; k < len; ++k)
                     {
-                        v2 = _mm256_loadu_ps(pVects[k]);
-                        pVects[k] += 8;
-                        diff = _mm256_sub_ps(v1, v2);
-                        regs[k] = _mm256_add_ps(regs[k], _mm256_mul_ps(diff, diff));
+                        v2 = _mm512_loadu_ps(pVects[k]);
+                        pVects[k] += 16;
+                        diff = _mm512_sub_ps(v1, v2);
+                        regs[k] = _mm512_add_ps(regs[k], _mm512_mul_ps(diff, diff));
                     }
-                    pVect += 8;
-                    v1 = _mm256_loadu_ps(pVect);
-                    for (size_t k = 0; k < len; ++k)
-                    {
-                        v2 = _mm256_loadu_ps(pVects[k]);
-                        pVects[k] += 8;
-                        diff = _mm256_sub_ps(v1, v2);
-                        regs[k] = _mm256_add_ps(regs[k], _mm256_mul_ps(diff, diff));
-                    }
-                    pVect += 8;
+                    pVect += 16;
+                    // v1 = _mm512_loadu_ps(pVect);
+                    // for (size_t k = 0; k < len; ++k)
+                    // {
+                    //     v2 = _mm512_loadu_ps(pVects[k]);
+                    //     pVects[k] += 16;
+                    //     diff = _mm512_sub_ps(v1, v2);
+                    //     regs[k] = _mm512_add_ps(regs[k], _mm512_mul_ps(diff, diff));
+                    // }
+                    // pVect += 16;
                 }
                 for (size_t k = 0; k < len; ++k)
                 {
-                    _mm256_store_ps(TmpRes, regs[k]);
+                    float PORTABLE_ALIGN64 TmpRes[16];
+                    _mm512_store_ps(TmpRes, regs[k]);
                     dist = std::min(dist, TmpRes[0] + TmpRes[1] + TmpRes[2] + TmpRes[3] + TmpRes[4] + TmpRes[5] +
-                                          TmpRes[6] + TmpRes[7]);
+                                          TmpRes[6] + TmpRes[7] + TmpRes[8] + TmpRes[9] + TmpRes[10] + TmpRes[11] +
+                                              TmpRes[12] + TmpRes[13] + TmpRes[14] + TmpRes[15]);
                 }
             }
 
@@ -445,16 +451,17 @@ namespace hnswlib
 
         inline dist_t distance(const void *data, tableint id2, dist_t *v) const
         {
+            size_t reg_num = 29;
             auto &list2 = super_node_list_.at(id2)->contain_points_list;
 
             size_t qty = *((size_t *) dist_func_param_);
             size_t qty16 = qty >> 4;
-            __m256 diff, v1, v2;
-            __m256 regs[13];
-            std::vector<float *> pVects(13, nullptr);
-            for (size_t j = 0; j < list2.size(); j = j + 13)
+            __m512 diff, v1, v2;
+            __m512 regs[reg_num];
+            std::vector<float *> pVects(reg_num, nullptr);
+            for (size_t j = 0; j < list2.size(); j = j + reg_num)
             {
-                size_t len = std::min(list2.size() - j, static_cast<size_t>(13));
+                size_t len = std::min(list2.size() - j, static_cast<size_t>(reg_num));
                 auto *pVect = (float *) data;
                 const float *pEnd = pVect + (qty16 << 4);
                 for (size_t k = 0; k < len; ++k)
@@ -463,35 +470,36 @@ namespace hnswlib
                 }
                 for (auto &reg: regs)
                 {
-                    reg = _mm256_set1_ps(0.0f);
+                    reg = _mm512_set1_ps(0.0f);
                 }
                 while (pVect < pEnd)
                 {
-                    v1 = _mm256_loadu_ps(pVect);
+                    v1 = _mm512_loadu_ps(pVect);
                     for (size_t k = 0; k < len; ++k)
                     {
-                        v2 = _mm256_loadu_ps(pVects[k]);
-                        pVects[k] += 8;
-                        diff = _mm256_sub_ps(v1, v2);
-                        regs[k] = _mm256_add_ps(regs[k], _mm256_mul_ps(diff, diff));
+                        v2 = _mm512_loadu_ps(pVects[k]);
+                        pVects[k] += 16;
+                        diff = _mm512_sub_ps(v1, v2);
+                        regs[k] = _mm512_add_ps(regs[k], _mm512_mul_ps(diff, diff));
                     }
-                    pVect += 8;
-                    v1 = _mm256_loadu_ps(pVect);
-                    for (size_t k = 0; k < len; ++k)
-                    {
-                        v2 = _mm256_loadu_ps(pVects[k]);
-                        pVects[k] += 8;
-                        diff = _mm256_sub_ps(v1, v2);
-                        regs[k] = _mm256_add_ps(regs[k], _mm256_mul_ps(diff, diff));
-                    }
-                    pVect += 8;
+                    pVect += 16;
+                    // v1 = _mm512_loadu_ps(pVect);
+                    // for (size_t k = 0; k < len; ++k)
+                    // {
+                    //     v2 = _mm512_loadu_ps(pVects[k]);
+                    //     pVects[k] += 16;
+                    //     diff = _mm512_sub_ps(v1, v2);
+                    //     regs[k] = _mm512_add_ps(regs[k], _mm512_mul_ps(diff, diff));
+                    // }
+                    // pVect += 16;
                 }
                 for (size_t k = 0; k < len; ++k)
                 {
-                    float PORTABLE_ALIGN32 TmpRes[8];
-                    _mm256_store_ps(TmpRes, regs[k]);
+                    float PORTABLE_ALIGN64 TmpRes[16];
+                    _mm512_store_ps(TmpRes, regs[k]);
                     v[j + k] = TmpRes[0] + TmpRes[1] + TmpRes[2] + TmpRes[3] + TmpRes[4] + TmpRes[5] +
-                               TmpRes[6] + TmpRes[7];
+                               TmpRes[6] + TmpRes[7] + TmpRes[8] + TmpRes[9] + TmpRes[10] + TmpRes[11] +
+                                   TmpRes[12] + TmpRes[13] + TmpRes[14] + TmpRes[15];
                 }
             }
             return *std::min_element(v, v + list2.size());
