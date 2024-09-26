@@ -359,6 +359,7 @@ namespace hnswlib
                     while (pVect < pEnd)
                     {
                         v1 = _mm512_loadu_ps(pVect);
+                        pVect += 16;
                         for (size_t k = 0; k < len; ++k)
                         {
                             v2 = _mm512_loadu_ps(pVects[k]);
@@ -366,16 +367,6 @@ namespace hnswlib
                             diff = _mm512_sub_ps(v1, v2);
                             regs[k] = _mm512_add_ps(regs[k], _mm512_mul_ps(diff, diff));
                         }
-                        pVect += 16;
-                        // v1 = _mm512_loadu_ps(pVect);
-                        // for (size_t k = 0; k < len; ++k)
-                        // {
-                        //     v2 = _mm512_loadu_ps(pVects[k]);
-                        //     pVects[k] += 16;
-                        //     diff = _mm512_sub_ps(v1, v2);
-                        //     regs[k] = _mm512_add_ps(regs[k], _mm512_mul_ps(diff, diff));
-                        // }
-                        // pVect += 16;
                     }
                     for (size_t k = 0; k < len; ++k)
                     {
@@ -417,6 +408,7 @@ namespace hnswlib
                 while (pVect < pEnd)
                 {
                     v1 = _mm512_loadu_ps(pVect);
+                    pVect += 16;
                     for (size_t k = 0; k < len; ++k)
                     {
                         v2 = _mm512_loadu_ps(pVects[k]);
@@ -424,16 +416,6 @@ namespace hnswlib
                         diff = _mm512_sub_ps(v1, v2);
                         regs[k] = _mm512_add_ps(regs[k], _mm512_mul_ps(diff, diff));
                     }
-                    pVect += 16;
-                    // v1 = _mm512_loadu_ps(pVect);
-                    // for (size_t k = 0; k < len; ++k)
-                    // {
-                    //     v2 = _mm512_loadu_ps(pVects[k]);
-                    //     pVects[k] += 16;
-                    //     diff = _mm512_sub_ps(v1, v2);
-                    //     regs[k] = _mm512_add_ps(regs[k], _mm512_mul_ps(diff, diff));
-                    // }
-                    // pVect += 16;
                 }
                 for (size_t k = 0; k < len; ++k)
                 {
@@ -474,6 +456,7 @@ namespace hnswlib
                 while (pVect < pEnd)
                 {
                     v1 = _mm512_loadu_ps(pVect);
+                    pVect += 16;
                     for (size_t k = 0; k < len; ++k)
                     {
                         v2 = _mm512_loadu_ps(pVects[k]);
@@ -481,16 +464,6 @@ namespace hnswlib
                         diff = _mm512_sub_ps(v1, v2);
                         regs[k] = _mm512_add_ps(regs[k], _mm512_mul_ps(diff, diff));
                     }
-                    pVect += 16;
-                    // v1 = _mm512_loadu_ps(pVect);
-                    // for (size_t k = 0; k < len; ++k)
-                    // {
-                    //     v2 = _mm512_loadu_ps(pVects[k]);
-                    //     pVects[k] += 16;
-                    //     diff = _mm512_sub_ps(v1, v2);
-                    //     regs[k] = _mm512_add_ps(regs[k], _mm512_mul_ps(diff, diff));
-                    // }
-                    // pVect += 16;
                 }
                 for (size_t k = 0; k < len; ++k)
                 {
@@ -696,19 +669,9 @@ namespace hnswlib
             if (bare_bone_search ||
                 (!isMarkedDeleted(ep_id) && ((!isIdAllowed) || (*isIdAllowed)(getExternalLabel(ep_id)))))
             {
-                // lowerBound = distance(data_point, ep_id, this->node_dist);
                 lowerBound = fstdistfunc_(data_point, super_node_list_.at(ep_id)->center_point.data(),
                                           dist_func_param_);
                 top_candidates.emplace(lowerBound, ep_id);
-                // for (size_t i = 0; i < this->super_node_list_.at(ep_id)->contain_points_list.size(); i++)
-                // {
-                //     top_candidates.emplace(node_dist[i], this->super_node_list_.at(ep_id)->contain_points_list[i].first);
-                // }
-                //
-                // if (!bare_bone_search && stop_condition)
-                // {
-                //     // stop_condition->add_point_to_result(getExternalLabel(ep_id), ep_data, dist);
-                // }
                 candidate_set.emplace(-lowerBound, ep_id);
             } else
             {
@@ -746,7 +709,6 @@ namespace hnswlib
                 tableint current_node_id = current_node_pair.second;
                 int *data = (int *) get_linklist0(current_node_id);
                 size_t size = getListCount((linklistsizeint *) data);
-//                bool cur_node_deleted = isMarkedDeleted(current_node_id);
                 if (collect_metrics)
                 {
                     metric_hops++;
@@ -778,18 +740,6 @@ namespace hnswlib
                     {
                         visited_array[candidate_id] = visited_array_tag;
                         dist_t dist = center_node_dist[j];
-                        // dist_t dist = center_node_dist[j] - super_node_list_.at(candidate_id)->radius;
-                        // if (top_candidates.size() < ef || lowerBound > dist)
-                        // {
-                        //     dist = distance(data_point, candidate_id, this->node_dist);
-                        // }
-                        // else
-                        // {
-                        //     num1++;
-                        //     continue;
-                        // }
-                        // num2++;
-
                         bool flag_consider_candidate;
                         if (!bare_bone_search && stop_condition)
                         {
@@ -811,13 +761,6 @@ namespace hnswlib
                                 (!isMarkedDeleted(candidate_id) &&
                                  ((!isIdAllowed) || (*isIdAllowed)(getExternalLabel(candidate_id)))))
                             {
-                                // for (size_t i = 0; i < this->super_node_list_.at(candidate_id)->contain_points_list.size(); i++)
-                                // {
-                                //     if (top_candidates.size() < ef || lowerBound > node_dist[i])
-                                //     {
-                                //         top_candidates.emplace(node_dist[i], this->super_node_list_.at(candidate_id)->contain_points_list[i].first);
-                                //     }
-                                // }
                                 top_candidates.emplace(dist, candidate_id);
                                 candidate_set.emplace(-dist, candidate_id);
                                 if (!bare_bone_search && stop_condition)
@@ -1466,7 +1409,7 @@ namespace hnswlib
                 SuperNode *superNode_ptr = this->super_node_list_.at(index);
                 superNode_ptr->add_point(cur_c, data_point);
                 // 更新超点
-                // this->addPoint(this->super_node_list_.at(superNode)->center_point.data(), superNode);
+                // this->addPoint(this->super_node_list_.at(index)->center_point.data(), index);
             }
             return true;
         }
@@ -1926,7 +1869,6 @@ namespace hnswlib
             while (!superNode_candidates.empty())
             {
                 std::pair<dist_t, tableint> rez = superNode_candidates.top();
-                // superNode_candidates_vec.push_back(rez);
                 superNode_candidates_vec[index] = rez;
                 index++;
                 superNode_candidates.pop();
