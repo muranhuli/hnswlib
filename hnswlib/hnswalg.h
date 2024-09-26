@@ -278,7 +278,7 @@ namespace hnswlib
         // 计算超点中心点之间的距离
         inline void distance(const void *data, tableint *superNodedata, int size, dist_t *v) const
         {
-            size_t reg_num = 29;
+            size_t reg_num = 13;
             size_t qty = *((size_t *) dist_func_param_);
             size_t qty16 = qty >> 4;
             __m512 diff, v1, v2;
@@ -331,7 +331,7 @@ namespace hnswlib
 
         inline dist_t distance(tableint id1, tableint id2) const
         {
-            size_t reg_num = 29;
+            size_t reg_num = 13;
             dist_t dist = INT64_MAX;
             auto &list1 = super_node_list_.at(id1)->contain_points_list;
             auto &list2 = super_node_list_.at(id2)->contain_points_list;
@@ -383,7 +383,7 @@ namespace hnswlib
 
         inline dist_t distance(const void *data, tableint id2) const
         {
-            size_t reg_num = 29;
+            size_t reg_num = 13;
             dist_t dist = INT64_MAX;
             auto &list2 = super_node_list_.at(id2)->contain_points_list;
 
@@ -432,12 +432,11 @@ namespace hnswlib
 
         inline dist_t distance(const void *data, tableint id2, dist_t *v) const
         {
-            size_t reg_num = 29;
+            size_t reg_num = 13;
             auto &list2 = super_node_list_.at(id2)->contain_points_list;
 
             size_t qty = *((size_t *) dist_func_param_);
             size_t qty16 = qty >> 4;
-            __m512 diff, v1, v2;
             __m512 regs[reg_num];
             std::vector<float *> pVects(reg_num, nullptr);
             for (size_t j = 0; j < list2.size(); j = j + reg_num)
@@ -455,23 +454,24 @@ namespace hnswlib
                 }
                 while (pVect < pEnd)
                 {
-                    v1 = _mm512_loadu_ps(pVect);
+                    __m512 v1 = _mm512_loadu_ps(pVect);
                     pVect += 16;
                     for (size_t k = 0; k < len; ++k)
                     {
-                        v2 = _mm512_loadu_ps(pVects[k]);
+                        __m512 v2 = _mm512_loadu_ps(pVects[k]);
                         pVects[k] += 16;
-                        diff = _mm512_sub_ps(v1, v2);
+                        __m512 diff = _mm512_sub_ps(v1, v2);
                         regs[k] = _mm512_add_ps(regs[k], _mm512_mul_ps(diff, diff));
                     }
                 }
                 for (size_t k = 0; k < len; ++k)
                 {
-                    float PORTABLE_ALIGN64 TmpRes[16];
-                    _mm512_store_ps(TmpRes, regs[k]);
-                    v[j + k] = TmpRes[0] + TmpRes[1] + TmpRes[2] + TmpRes[3] + TmpRes[4] + TmpRes[5] +
-                               TmpRes[6] + TmpRes[7] + TmpRes[8] + TmpRes[9] + TmpRes[10] + TmpRes[11] +
-                               TmpRes[12] + TmpRes[13] + TmpRes[14] + TmpRes[15];
+                    v[j + k] = _mm512_reduce_add_ps(regs[k]);
+                    // float PORTABLE_ALIGN64 TmpRes[16];
+                    // _mm512_store_ps(TmpRes, regs[k]);
+                    // v[j + k] = TmpRes[0] + TmpRes[1] + TmpRes[2] + TmpRes[3] + TmpRes[4] + TmpRes[5] +
+                    //            TmpRes[6] + TmpRes[7] + TmpRes[8] + TmpRes[9] + TmpRes[10] + TmpRes[11] +
+                    //            TmpRes[12] + TmpRes[13] + TmpRes[14] + TmpRes[15];
                 }
             }
             return *std::min_element(v, v + list2.size());
