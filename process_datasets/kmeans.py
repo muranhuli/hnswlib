@@ -1,9 +1,21 @@
 import h5py
 import numpy as np
 from sklearn.cluster import KMeans
+import argparse
+
+# 读取file_path，由外部传入
+# 创建命令行参数解析器
+parser = argparse.ArgumentParser(description="Plot CDF from a file containing one numeric value per line.")
+
+# 添加参数：文件路径
+parser.add_argument("file_path", help="Path to the input file containing the data")
+
+# 解析命令行参数
+args = parser.parse_args()
+
 
 # 1. 加载HDF5数据
-file_path = '/home/liuyu/data/hdf5/sift-128-euclidean.hdf5'  # 假设HDF5文件在当前目录下
+file_path = args.file_path
 
 # 打开HDF5文件并读取/train目录下的数据
 with h5py.File(file_path, 'r') as f:
@@ -16,7 +28,7 @@ print("训练数据形状：", train_data.shape)
 n_clusters = train_data.shape[0]//13  # 你可以根据需求调整 n 的值
 
 # 3. 使用KMeans进行聚类
-kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+kmeans = KMeans(n_clusters=n_clusters, random_state=42, max_iter=3000, tol=1e-5)
 
 # 进行聚类计算
 kmeans.fit(train_data)
@@ -42,4 +54,6 @@ with h5py.File(file_path, 'r+') as f:  # 重新以读写模式打开文件
     f.create_dataset('/kmeans_centers', data=cluster_centers)
 
 print("聚类标签和质心已保存到 HDF5 文件中。")
+
+
 

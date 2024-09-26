@@ -75,8 +75,6 @@ namespace hnswlib
         std::mutex deleted_elements_lock;  // lock for deleted_elements
         std::unordered_set<tableint> deleted_elements;  // contains internal ids of deleted elements
 
-        dist_t *radiu_dist;
-
         struct SuperNode
         {
             tableint id;
@@ -108,6 +106,22 @@ namespace hnswlib
                 update_radius();
             }
 
+            void add_center_point(const void *data_point)
+            {
+                // 添加普通顶点id
+                // 添加普通顶点数据，将data_point拷贝至contain_points_list的最后一个元素
+                memcpy(center_point.data(), data_point, parent->data_size_);
+            }
+
+            void add_common_point(tableint point_id, const void *data_point)
+            {
+                parent->cur_element_count++;
+                // 添加普通顶点id
+                contain_points_list.emplace_back(point_id, std::vector<dist_t>(*((size_t *) parent->dist_func_param_)));
+                // 添加普通顶点数据，将data_point拷贝至contain_points_list的最后一个元素
+                memcpy(contain_points_list.rbegin()->second.data(), data_point, parent->data_size_);
+            }
+
             // 更新超点中心点
             void update_center_point()
             {
@@ -137,7 +151,6 @@ namespace hnswlib
                     max_dis = std::max(max_dis, dis);
                 }
                 radius = max_dis;
-                parent->radiu_dist[id] = max_dis;
             }
         };
 
@@ -236,7 +249,6 @@ namespace hnswlib
 
             // 自定义数据
             node_to_super_node_.resize(max_elements_, 0);
-            radiu_dist = new dist_t[max_elements_];
             node_dist = new dist_t[max_nodes_in_supernode];
             center_node_dist = new dist_t[maxM0_];
         }
@@ -273,6 +285,13 @@ namespace hnswlib
                 sum_edge += size;
             }
             std::cout << "The size of edge is " << sum_edge << std::endl;
+            std::cout << "正在输出超点的半径" <<std::endl;
+            std::ofstream fout("radiu_dist.txt");
+            for (size_t i = 0; i < cur_super_node_count; i++)
+            {
+                fout << super_node_list_.at(i)->radius << std::endl;
+            }
+            fout.close();
         }
 
         // 计算超点中心点之间的距离
@@ -1722,7 +1741,7 @@ namespace hnswlib
             this->node_to_super_node_[cur_c] = cur_superNode;
             this->super_node_list_.emplace_back(new SuperNode(cur_superNode, this));
             // SuperNode *superNode_ptr = this->super_node_list_.at(cur_superNode);
-            this->super_node_list_.at(cur_superNode)->add_point(cur_c, data_point);
+            this->super_node_list_.at(cur_superNode)->add_center_point(data_point);
 
             // Initialisation of the data and label
             // memcpy(getExternalLabeLp(cur_superNode), &label, sizeof(labeltype));

@@ -12,7 +12,7 @@ int main()
     std::string filename = "/home/liuyu/data/hdf5/fashion-mnist-784-euclidean.hdf5";
 
     hsize_t dims_out[2];
-    auto data = DataRead::read_hdf5_float(filename, "/train",
+    auto data = DataRead::read_hdf5_float(filename, "/kmeans_centers",
                                           dims_out);
     int dim = int(dims_out[1]);
     int max_elements = int(dims_out[0]);
@@ -26,29 +26,33 @@ int main()
     auto *alg_hnsw = new hnswlib::HierarchicalNSW<float>(&space, max_elements, disThreshold,
                                                          maxNum, M,
                                                          ef_construction, 100, true);
-
     // Add data to index
     {
         Time time("Build Index");
         for (int i = 0; i < max_elements; i++)
         {
             schedule("AddPoint", i, max_elements);
-            std::priority_queue<std::pair<float, hnswlib::labeltype>> result = alg_hnsw->searchKnn(data.get() + i * dim, 20);
-            std::set<int> result_label;
-            while (!result.empty())
-            {
-                result_label.insert(int(result.top().second));
-                result.pop();
-            }
-
-            if (result_label.empty() or
-                !alg_hnsw->addPointToSuperNode(data.get() + i * dim, result_label))
             {
                 hnswlib::labeltype label = alg_hnsw->cur_super_node_count;
                 alg_hnsw->addPoint(data.get() + i * dim, label);
             }
         }
     }
+    // Add neighbors to index
+    auto kmeans_labels = DataRead::read_label(filename, "/kmeans_labels",
+                                                 dims_out);
+    auto train = DataRead::read_hdf5_float(filename, "/train",
+                                     dims_out);
+    for (size_t i = 0; i< size_t(dims_out[0]);i++)
+    {
+        alg_hnsw->super_node_list_.at(kmeans_labels[i])->add_common_point(i, train.get()+i*dim);
+    }
+    for (auto && info : alg_hnsw->super_node_list_)
+    {
+        info->update_radius();
+    }
+
+
     alg_hnsw->hnsw_graph_info_stats();
 
     auto test_data = DataRead::read_hdf5_float(filename, "/test",
